@@ -91,7 +91,7 @@
 use fieldcraft_parallel as parallel;
 
 use crate::lattice::{C, Q, opposite};
-use crate::wall::{BOUNCE_B, BOUNCE_KAPPA, spalding_friction};
+use crate::wall::{BOUNCE_B, BOUNCE_KAPPA, MIXING_A_PLUS, MIXING_KAPPA, spalding_friction, spalding_u_plus};
 
 /// The wall law the on-node wall takes its stress from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -201,8 +201,11 @@ pub fn on_node(fq: &mut [f64; Q], axis: usize, inward: i32, stress: [f64; 3]) ->
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WallNode {
     pub cell: u32,
-    /// The interior node one cell into the fluid along the normal, which gives the stress.
+    /// The interior node one cell into the fluid along the normal.
     pub interior: u32,
+    /// The cell the law is read at: `interior` for `spalding_bounce`, [`MATCHING_ROWS`] cells into the
+    /// fluid for the matched wall.
+    pub sample: u32,
     /// The wall's normal axis and the sign of its inward normal (+1 at a min face).
     pub axis: u8,
     pub inward: i8,
@@ -222,6 +225,15 @@ pub struct WallNode {
     pub body: [f64; 3],
 }
 
+/// The matched wall's sample height in rows: Spalding's law is read this many cells from the wall,
+/// the matching height h_wm = `MATCHING_ROWS` Δx (on the lattice Δx = Δy). Kawai and Larsson (Phys.
+/// Fluids 24:015105, 2012, §III.B) find the law's input from the fourth grid point off the wall
+/// sufficient (h_wm ≈ 4Δy_w); the value 4 comes from that paper. The owner's floor of 3 (h ≥ 3Δx)
+/// came from our own measurements; the paper does not state it. The rows below the sample, 1 …
+/// rows − 1, relax with the mixing-length eddy viscosity (Malaspinas and Sagaut, J. Comput. Phys.
+/// 275:25–40, 2014, eqs. 57–58).
+pub const MATCHING_ROWS: usize = 4;
+
 /// The boundary nodes of the on-node wall-function bounce, in cell order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WallNodes {
@@ -230,14 +242,45 @@ pub struct WallNodes {
     nu: f64,
     /// The wall law the stress comes from.
     law: NodeLaw,
+    /// The rows from each node's interior node to its sample: 1 for `spalding_bounce`,
+    /// [`MATCHING_ROWS`] for the matched wall.
+    rows: usize,
+    /// Per grid cell: its slot in `layer_rate` (`u32::MAX` for none). Empty without layers.
+    layer_of: Vec<u32>,
+    /// Per layer cell, in node order then row order: its relaxation rate (0 for none).
+    layer_rate: Vec<f64>,
 }
 
 impl WallNodes {
-    /// `nodes` (sorted here by cell) for a fluid of kinematic viscosity `nu` (lattice units),
-    /// their stress from `law`.
-    pub fn new(mut nodes: Vec<WallNode>, nu: f64, law: NodeLaw) -> WallNodes {
+    /// `nodes` (sorted here by cell) for a fluid of kinematic viscosity `nu` (lattice units), their
+    /// stress from `law`, with `rows` rows from each interior node to its sample, of `cells` grid
+    /// cells. `layer` lists the layer cells, rows 1 … rows − 1 of each node, in the sorted node order.
+    pub fn new(mut nodes: Vec<WallNode>, nu: f64, law: NodeLaw, rows: usize, cells: usize, layer: Vec<u32>) -> WallNodes {
         nodes.sort_by_key(|n| n.cell);
-        WallNodes { nodes, nu, law }
+        let mut layer_of = Vec::new();
+        if rows > 1 {
+            layer_of = vec![u32::MAX; cells];
+            for (slot, &cell) in layer.iter().enumerate() {
+                if let Some(s) = layer_of.get_mut(cell as usize) {
+                    *s = slot as u32;
+                }
+            }
+        }
+        WallNodes { nodes, nu, law, rows, layer_of, layer_rate: vec![0.0; layer.len()] }
+    }
+
+    /// The rows from each node's interior node to its sample.
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
+    /// The relaxation rate of `cell` when it is a layer cell of the matched wall with a rate
+    /// above 0 (the rate of the last sample), else `None`.
+    #[inline]
+    pub fn layer_rate(&self, cell: usize) -> Option<f64> {
+        let slot = *self.layer_of.get(cell)?;
+        let rate = *self.layer_rate.get(slot as usize)?;
+        (rate > 0.0).then_some(rate)
     }
 
     /// The wall law the stress comes from.
@@ -252,8 +295,8 @@ impl WallNodes {
         use crate::checkpoint::fixed;
         fixed(a, self.nodes.len() as u64)?;
         for w in &self.nodes {
-            let WallNode { cell, interior, axis, inward, group, stress: _, taken: _, friction: _, body: _ } = *w;
-            for v in [u64::from(cell), u64::from(interior), u64::from(axis), inward as u64, u64::from(group)] {
+            let WallNode { cell, interior, sample, axis, inward, group, stress: _, taken: _, friction: _, body: _ } = *w;
+            for v in [u64::from(cell), u64::from(interior), u64::from(sample), u64::from(axis), inward as u64, u64::from(group)] {
                 fixed(a, v)?;
             }
         }
@@ -270,26 +313,27 @@ impl WallNodes {
         &mut self.nodes
     }
 
-    /// Before the collision: each node's stress from `moments(cell)`, the density and velocity
-    /// (with the half force) of its interior node, and the wall law at distance 1, in parallel:
-    /// each node's is its own. Zero at rest or with a number that is not usable. Each node's
+    /// Before the collision: each node's stress from `moments(sample)`, the density and velocity
+    /// (with the half force) of its sample cell, the wall law at the sample's distance in rows, in
+    /// parallel: each node's is its own. Zero at rest or with a number that is not usable. Each node's
     /// `body` is its half cell's body force, `½ ρ force(node cell)` with the same density, after the
     /// wall law's dispatch and whatever the law: zero when that number is not finite. `force(cell)`
-    /// is the body acceleration of a cell.
+    /// is the body acceleration of a cell. With layers, each node's rows below the sample then take
+    /// their relaxation rates from the friction velocity just found.
     pub fn sample(&mut self, moments: impl Fn(usize) -> Option<(f64, [f64; 3])> + Sync, force: impl Fn(usize) -> [f64; 3] + Sync) {
-        let (nu, law) = (self.nu, self.law);
+        let (nu, law, rows) = (self.nu, self.law, self.rows as f64);
         parallel::for_each_mut(&mut self.nodes, |_, w| {
             w.stress = [0.0; 3];
             w.friction = 0.0;
             w.body = [0.0; 3];
-            let Some((rho, u)) = moments(w.interior as usize) else { return };
+            let Some((rho, u)) = moments(w.sample as usize) else { return };
             let axis = usize::from(w.axis).min(2);
             let mut t = u;
             if let Some(v) = t.get_mut(axis) {
                 *v = 0.0;
             }
             let speed = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
-            let ut = law.friction_velocity(speed, 1.0, nu);
+            let ut = law.friction_velocity(speed, rows, nu);
             let scale = rho * ut * ut / speed;
             if speed > 0.0 && scale.is_finite() {
                 w.stress = t.map(|v| scale * v);
@@ -300,7 +344,33 @@ impl WallNodes {
                 w.body = body;
             }
         });
+        if self.rows > 1 {
+            let (nu, layers) = (self.nu, self.rows - 1);
+            for (w, rates) in self.nodes.iter().zip(self.layer_rate.chunks_mut(layers)) {
+                for (j, rate) in rates.iter_mut().enumerate() {
+                    *rate = mixing_rate(nu, w.friction, j + 1);
+                }
+            }
+        }
     }
+}
+
+/// The mixing-length relaxation rate of the layer cell `row` cells from the wall (1 ≤ row <
+/// rows) for a friction velocity `ut` and viscosity `nu`: Malaspinas and Sagaut's eq. 57 with
+/// Spalding's ∂u/∂y, μ_t/ρ = (κ y V)² |∂u/∂y| (κ 0.384, V = 1 − exp(−y⁺/26)), and the rate
+/// 1/(3 (ν + ν_t) + ½). 0 (none) for a `ut` that is not usable.
+fn mixing_rate(nu: f64, ut: f64, row: usize) -> f64 {
+    if !(ut.is_finite() && ut > 0.0) {
+        return 0.0;
+    }
+    let y = row as f64;
+    let y_plus = y * ut / nu;
+    let (_, slope) = spalding_u_plus(y_plus, BOUNCE_KAPPA, BOUNCE_B);
+    let dudy = ut * ut / nu * slope;
+    let l = MIXING_KAPPA * y * (1.0 - libm::exp(-y_plus / MIXING_A_PLUS));
+    let nu_t = l * l * dudy;
+    let rate = 1.0 / (3.0 * (nu + nu_t) + 0.5);
+    if rate.is_finite() { rate } else { 0.0 }
 }
 
 #[cfg(test)]
