@@ -32,7 +32,6 @@ const HANDLES: app_bar::Handles<'static> = app_bar::Handles {
     home_rect: &["app_bar:home"],
     file: &["app_bar:file"],
     file_rect: &["app_bar:file"],
-    plugins: "app_bar:plugins",
     button: &["app_bar:"],
     separator: "app_bar:separator:",
     search: "ribbon:search",
@@ -88,10 +87,6 @@ fn release_notes() -> String {
     format!("https://github.com/tangency-labs/fieldcraft/releases/tag/v{}", crate::VERSION)
 }
 
-/// The name the kit's bar reads the offer span's drawn width under (`app_bar::show`, SolidCraft's
-/// Update pill's handle): FieldCraft publishes Solve and its Update pill's room there.
-const KIT_OFFER: &str = "titlebar:update";
-
 /// Solve's label and icon: the kit's primary icon-label action.
 const SOLVE: &str = "Solve";
 const SOLVE_ICON: &str = "play";
@@ -124,13 +119,15 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
     let button = |id, icon, tip, enabled, wide_only| BarButton { id, icon, tip, enabled, narrow: true, wide_only };
     let chrome = |id, icon, tip| BarButton { id, icon, tip, enabled: true, narrow: false, wide_only: false };
     let data = app_bar::AppBar {
+        // The kit's default arrangement, with no movable items and no app control before Home.
+        items: None,
+        quick_ids: &[],
+        leading: None,
         mark: &mark,
         name: "FieldCraft",
         home: chrome("home", "home", "Start: new, open, recent files and samples"),
         file: "File",
         file_open: app.ui.menu.as_deref() == Some("file"),
-        // FieldCraft runs no plugins.
-        plugins: None,
         actions: vec![
             button("save", "save", &save_tip, !busy, false),
             button("undo", "undo", &undo_tip, undo > 0 && !busy, true),
@@ -144,19 +141,17 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
             tip: "Report a bug: draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
             icon_only: false,
         },
-        pills: crate::links::pills(&app.prefs, r.width() >= app_bar::PILL_LABEL_MIN),
+        pills: crate::links::pills(&app.prefs, r.width() >= crate::links::PILL_LABEL_MIN),
         search: false,
         search_shortcut: None,
         assistant: false,
         version: Some(app_bar::Version { text: &version, url: &url }),
         handles: HANDLES,
     };
-    // What the bar drew in the kit's offer span last frame (Solve, the Update pill), where the kit
-    // reads it, so it puts the link pills left of it as it does SolidCraft's Update pill.
-    if app.offer_drawn > 0.0 {
-        solidcraft_ui_registry::publish_rect(KIT_OFFER, Rect::from_min_size(pos2(r.left(), r.top()), vec2(app.offer_drawn, r.height())));
-    }
-    let out = app_bar::show(ui, &data, r, content);
+    // The room the offer span asks for: Solve and, when one is on offer, its Update pill, both with
+    // their labels; the kit shortens them to their icons when the bar is narrow.
+    let offers = app_bar::Offers { update: Some(offer_room(app, ui)), managed: None };
+    let out = app_bar::show_with_offers(ui, &data, r, content, offers);
     // The kit's buttons, where it published them this frame (`ui.inspect`'s layout).
     for region in
         ["app_bar:home", "app_bar:file", "app_bar:save", "app_bar:undo", "app_bar:redo", "app_bar:help", "app_bar:settings", "app_bar:report"]
@@ -201,8 +196,8 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
                 }
             }
             BarAction::HidePill { id } => app.hide_link(id),
-            // The bar shows no Plugins button (`plugins: None`).
-            BarAction::Plugins { .. } => {}
+            // The bar has no app-owned control (`items: None`).
+            BarAction::App { .. } => {}
         }
     }
     let cy = r.center().y;
@@ -215,15 +210,15 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
         }
         app.place("app_bar:theme", rect);
     }
-    // An update on offer: SolidCraft's Update pill at the offer span's right end, before the
-    // right cluster; Solve goes left of it.
+    // An update on offer: SolidCraft's Update pill at the offer span's right end; Solve goes left
+    // of it.
     let k = solidcraft_theme::Tokens::get();
     let mut offer = out.offer;
     if let Some(pill) = update_pill(app, ui, offer, out.offer_labeled) {
         offer.max.x = pill.left() - 8.0;
         app.place("app_bar:update", pill);
     }
-    // Solve: right-aligned where the kit leaves room for an offer pill, before the right cluster.
+    // Solve: right-aligned in the span the kit leaves for an offer pill.
     let solve_w = kit::icon_label_width(ui, if out.offer_labeled { SOLVE } else { "" }, Some(SOLVE_ICON), true);
     let solve = Rect::from_center_size(pos2(offer.right() - solve_w / 2.0, cy), vec2(solve_w, k.control_height));
     let drawn_left = if offer.width() >= solve_w {
@@ -233,9 +228,6 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
     } else {
         offer.right()
     };
-    // Room the offer span's contents take from its right end, with the gap the kit keeps before
-    // the pills (it adds its own `+ 4`); none when nothing is drawn there.
-    app.offer_drawn = if drawn_left < out.offer.right() { out.offer.right() - drawn_left } else { 0.0 };
     // The document tab ends before the pills, or before Solve when there are none.
     let tabs_end = drawn_left.min(out.controls_left) - 8.0;
     document_tab(app, ui, r, out.tabs_start, tabs_end);
@@ -250,7 +242,31 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
 /// The Update pill's height and the room it leaves the document tab before it shortens its
 /// label (SolidCraft's `PILL_HEIGHT`, `update::TAB_ROOM`).
 const PILL_HEIGHT: f32 = 22.0;
+/// The Update pill's text start and right padding, past its mark.
+const PILL_TEXT_X: f32 = 29.0;
+const PILL_RIGHT_PAD: f32 = 11.0;
 const PILL_TAB_ROOM: f32 = 300.0;
+
+/// The room the offer span asks the kit for: Solve with its label, and the Update pill with its own
+/// when one is on offer, with the gap between them.
+fn offer_room(app: &mut ModelApp, ui: &mut egui::Ui) -> f32 {
+    let solve = kit::icon_label_width(ui, SOLVE, Some(SOLVE_ICON), true);
+    update_pill_width(app, ui).map_or(solve, |pill| solve + 8.0 + pill)
+}
+
+/// The Update pill at its longest label, for the room the offer span asks for.
+fn update_pill_width(app: &mut ModelApp, ui: &mut egui::Ui) -> Option<f32> {
+    use crate::updates::Offer;
+    let offer = crate::updates::offer(app)?;
+    let label = match &offer {
+        Offer::Release(version) => format!("Update to {version}"),
+        Offer::Busy(_) => "Update".to_string(),
+        Offer::Reload => "Reload to update".to_string(),
+    };
+    let k = solidcraft_theme::Tokens::get();
+    let text = ui.painter().layout_no_wrap(label, FontId::proportional(k.font_label), k.app_bar_text).size().x;
+    Some(PILL_TEXT_X + text + PILL_RIGHT_PAD)
+}
 
 /// SolidCraft's Update pill (`update::button`, `toolbar::offer_pill`): an accent pill at the right
 /// end of `span` reading "Update to X", or "Update" when the document tab would be squeezed, or
@@ -266,7 +282,7 @@ fn update_pill(app: &mut ModelApp, ui: &mut egui::Ui, span: Rect, labeled: bool)
     };
     let k = solidcraft_theme::Tokens::get();
     let font = FontId::proportional(k.font_label);
-    let (icon_x, text_x, right_pad) = (16.0, 29.0, 11.0);
+    let (icon_x, text_x, right_pad) = (16.0, PILL_TEXT_X, PILL_RIGHT_PAD);
     let labels = [full.as_str(), "Update"];
     let label = labels.iter().enumerate().filter(|_| labeled).find_map(|(i, text)| {
         let width = text_x + ui.painter().layout_no_wrap(text.to_string(), font.clone(), k.app_bar_text).size().x + right_pad;
@@ -343,11 +359,12 @@ fn document_tab(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32
         }
     }
     let close_key = shortcut("W");
-    let menu = [app_bar::TabMenuRow { id: "close", label: "Close", key_on_selected: &close_key, needs_others: false }];
+    let menu = [app_bar::TabMenuRow::new("close", "Close", &close_key)];
     let mut strip = app_bar::TabStrip {
-        tabs: vec![app_bar::DocTab { name: &name, list_name: &name, dirty, place: &place, security: None }],
+        tabs: vec![app_bar::DocTab { name: &name, list_name: &name, dirty, place: &place, security: None, views: &[] }],
         selected: 0,
         shown_selected: (!app.start_shown()).then_some(0),
+        pop_out: false,
         title_bar: true,
         double_click_renames: false,
         rename: None,
@@ -358,6 +375,24 @@ fn document_tab(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32
         new_tip: "New model (File › New)",
         id: egui::Id::unique("fc_document_tabs"),
         handles: TAB_HANDLES,
+        // One view a model, so no view tabs, switcher, layouts or tear-off.
+        views_as_tabs: false,
+        switcher_always: false,
+        clear_view_tabs: false,
+        view_text: app_bar::ViewText::default(),
+        view_menu: &[],
+        view_right_row: "",
+        view_rename_row: "",
+        view_rename: None,
+        plus_menu: &[],
+        layout_menu: &[],
+        view_layout: None,
+        layout_current: "",
+        layout_tip: "",
+        layout_fill: "",
+        layout_fill_heading: "",
+        switcher_menu: &[],
+        tear_off_below: 0.0,
     };
     // The strip's hit regions stay clear of what is right of it.
     let room = Rect::from_min_max(pos2(x0, r.top()), pos2(x1, r.bottom()));
@@ -391,6 +426,11 @@ const TAB_HANDLES: app_bar::TabHandles<'static> = app_bar::TabHandles {
     rename: "document_tab_rename",
     menu_row: "document_tab_menu:",
     more_row: "document_tabs_more:",
+    view: "document_view:",
+    view_close: "document_view_close:",
+    view_new: "document_view_new",
+    view_more: "document_views_more",
+    switcher: "document_view_switcher",
 };
 
 /// The shortcut text with this platform's command key.
@@ -496,9 +536,10 @@ mod tests {
         app.layout
     }
 
-    /// Left to right as in SolidCraft: Home, File, its actions, the theme, the document tab, Solve,
-    /// Settings, Help and Report a bug; the left group starts after the traffic
-    /// lights, and Solve and the right cluster stay put.
+    /// Left to right as in SolidCraft: Home, File, its actions, the theme, the document tab,
+    /// Settings, Help, Report a bug and Solve, where SolidCraft puts its Update pill, at the right
+    /// end; the left group starts after the traffic lights, and Solve and the right cluster stay
+    /// put.
     #[test]
     fn the_title_bar_is_laid_out_as_solidcrafts() {
         let at = |m: &std::collections::BTreeMap<&'static str, Rect>, k: &str| m.get(k).copied().unwrap_or_else(|| panic!("{k} not drawn"));
@@ -515,20 +556,20 @@ mod tests {
                 "app_bar:redo",
                 "app_bar:theme",
                 "document_tab",
-                "app_bar:solve",
                 "app_bar:settings",
                 "app_bar:help",
                 "app_bar:report",
+                "app_bar:solve",
             ];
             for pair in order.windows(2) {
                 let (a, b) = (at(&m, pair[0]), at(&m, pair[1]));
                 assert!(a.right() <= b.left() + 0.5, "{} {a:?} before {} {b:?}", pair[0], pair[1]);
             }
-            assert!(at(&m, "app_bar:report").right() < 1400.0 && at(&m, "app_bar:solve").left() > 700.0);
+            assert!(at(&m, "app_bar:solve").right() <= 1400.0 && at(&m, "app_bar:solve").left() > 700.0);
         }
     }
 
-    /// An update on offer is SolidCraft's Update pill before the right cluster, Solve left of it;
+    /// An update on offer is SolidCraft's Update pill at the bar's right end, Solve left of it;
     /// with none on offer there is no pill.
     #[test]
     fn an_update_on_offer_is_a_pill_before_settings() {
@@ -549,7 +590,7 @@ mod tests {
         let m = draw(true);
         let at = |k: &str| m.get(k).copied().unwrap_or_else(|| panic!("{k} not drawn"));
         let (solve, update, settings) = (at("app_bar:solve"), at("app_bar:update"), at("app_bar:settings"));
-        assert!(solve.right() < update.left() && update.right() < settings.left(), "{solve:?} {update:?} {settings:?}");
+        assert!(settings.right() < solve.left() && solve.right() < update.left(), "{solve:?} {update:?} {settings:?}");
     }
 
     /// The document tab is the kit's tab strip, as SolidCraft's: it starts just after the
@@ -612,7 +653,7 @@ mod tests {
         }
     }
 
-    /// Donate, then Discord, sit after the document tab and before Solve and Report a bug, as
+    /// Donate, then Discord, sit after the document tab and before Report a bug and Solve, as
     /// SolidCraft's sit before its Update pill, each a capsule in its service's own colour (the kit's `app_bar::brand`), and `ui.inspect`'s layout names them.
     #[test]
     fn the_community_pills_sit_before_report_a_bug_in_their_own_colours() {
@@ -622,7 +663,7 @@ mod tests {
         let out = frame(&mut app, &ctx, Vec::new());
         let (tab, donate, discord) = (region(&app, "document_tab"), region(&app, "app_bar:donate"), region(&app, "app_bar:discord"));
         let (solve, report) = (region(&app, "app_bar:solve"), region(&app, "app_bar:report"));
-        for (a, b) in [(tab, donate), (donate, discord), (discord, solve), (solve, report)] {
+        for (a, b) in [(tab, donate), (donate, discord), (discord, report), (report, solve)] {
             assert!(a.right() <= b.left(), "{a:?} before {b:?}: tab {tab:?} donate {donate:?} discord {discord:?} solve {solve:?} report {report:?}");
         }
         for (pill, fill) in [(donate, app_bar::brand::KOFI), (discord, app_bar::brand::DISCORD)] {

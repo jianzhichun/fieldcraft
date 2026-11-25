@@ -141,8 +141,8 @@ pub fn page(app: &mut ModelApp, ui: &mut egui::Ui) -> bool {
             app.place(region, r);
         }
     }
-    // Esc chooses Back. A stop-gap until the kit's start page binds Esc itself
-    // (solidcraft#17391); delete it then, or it takes the key first. It runs after the kit has
+    // Esc chooses Back. The kit's page binds Esc itself (`Back::escape`) but knows nothing of what
+    // the window draws over it, so it is off and the host chooses. It runs after the kit has
     // drawn, so the kit's open rail menu (a narrow window) takes Esc first, and only when nothing
     // of the window's (a prompt, a menu, the command search, Settings) was over the page as the
     // last frame ended: a menu drawn before the page this frame has already closed on this Esc.
@@ -190,7 +190,14 @@ fn contents<'a>(app: &'a ModelApp, ctx: &egui::Context, interactive: bool) -> Pa
         id: "start",
         name: "Start".into(),
         interactive,
-        back: Back { template: "Back to {name}".into(), document: app.model_name().into(), shortcut: "Esc".into(), chosen: Action::Back },
+        back: Some(Back {
+            template: "Back to {name}".into(),
+            document: app.model_name().into(),
+            shortcut: "Esc".into(),
+            chosen: Action::Back,
+            // Esc is the host's: it closes what is over the page first (below).
+            escape: false,
+        }),
         rail,
         title: title.into(),
         hint: hint.into(),

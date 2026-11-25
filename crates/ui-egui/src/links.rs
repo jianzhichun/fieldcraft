@@ -43,6 +43,10 @@ pub struct Link {
 /// Where the kit's bar publishes the pills: each [`Link::region`] starts with it.
 pub const PILL_PREFIX: &str = "app_bar:";
 
+/// The bar's width from which the named pills show their label, as the kit's bar did before it left
+/// the choice to the host.
+pub const PILL_LABEL_MIN: f32 = 1100.0;
+
 /// The links, left to right.
 pub const LINKS: &[Link] = &[
     Link {

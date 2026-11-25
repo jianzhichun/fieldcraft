@@ -295,7 +295,7 @@ impl Steps<'_> {
     fn step(&self, strip: &mut history_bar::Strip<'_, '_>, item: &Item) {
         let reachable = item.end >= self.oldest;
         let label = describe(item);
-        let tip = || tip(item, reachable);
+        let tip = || kit::StatusTip { head: tip(item, reachable), ..Default::default() };
         let step = history_bar::Step {
             id: item.start as u64,
             slot: item.start,

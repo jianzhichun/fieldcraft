@@ -142,6 +142,7 @@ pub(crate) fn bar(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
                 show_text: false,
                 rect,
                 alias: None,
+                dot: false,
             }
         })
         .collect();

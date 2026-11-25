@@ -30,6 +30,8 @@ const DARK_ACCENT: Color32 = Color32::from_rgb(0x0e, 0x83, 0x7a);
 const DARK_ACCENT_INK: Color32 = Color32::from_rgb(0x5c, 0xd6, 0xcb);
 /// How far a hovered accent fill moves toward black: darker keeps white on it legible.
 const ACCENT_HOVER: f32 = 0.12;
+/// How far a dark sheet paper moves from the accent toward black: its ink (white) reads on it.
+const PAPER_DEPTH: f32 = 0.6;
 /// How far the selected document tab moves from the title bar toward white: the dark theme's
 /// step, (53 − 28) / (255 − 28). The bar is dark in both themes, and the light theme's own tab
 /// colour is almost the bar's.
@@ -135,6 +137,13 @@ pub const fn kit(dark: bool) -> kit_theme::Tokens {
     k.render_fill = a.fill;
     k.render_ink = a.ink;
     k.render_soft = a.soft;
+    // The sheet papers and the parts library's highlights: FieldCraft draws no sheets and has no
+    // parts library, but the kit's tokens carry their colours, so they take its accent family too.
+    k.paper_blueprint = a.fill;
+    k.paper_blueprint_ink = a.on;
+    k.paper_prussian_blue = mix(a.fill, Color32::BLACK, PAPER_DEPTH);
+    k.paper_prussian_blue_ink = a.on;
+    k.library_highlights = [a.fill; 5];
     if !dark {
         k.app_bar_tab_active = mix(k.app_bar, Color32::WHITE, TAB_ON_BAR);
     }
