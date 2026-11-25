@@ -4,7 +4,8 @@
 //! person's design does after they save it again; a recipe built afresh by a later release opens
 //! as the same bodies with the same face names (#605: FieldCraft 0.7.0 refused SolidCraft 0.16.2's
 //! designs; #655: the 0.16.2 pin refused 0.17's and 0.18's; the pin after 0.40.1 read up to
-//! format 55, which 0.41.0 saves, and refused 0.42.0's 57).
+//! format 55, which 0.41.0 saves, and refused 0.42.0's 57; the pin at v0.48.1 reads up to 66, which
+//! 0.48.1 saves).
 
 use std::path::{Path, PathBuf};
 
