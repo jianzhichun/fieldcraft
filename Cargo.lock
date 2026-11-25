@@ -175,6 +175,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -213,6 +222,12 @@ checksum = "ae221649c9976a6f6c56ae1facf410f3ddb33cc661c4b7b61020a912d4237fbc"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "anyhow"
+version = "1.0.105"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cb931c189b85683d69a5cfad41d4d418671e1ac413dd209f3f2fc31e3cfd902"
 
 [[package]]
 name = "arboard"
@@ -671,9 +686,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cadmpeg-codec-freecad"
-version = "0.6.7"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe0ed1935ace2c203b87107a064818dec2bb2ec2f250c4ad121767f3da75d1b"
+checksum = "e1471cfda38efa118fc045973b7ffc0a33b62968960677d37b3e94d3b771a210"
 dependencies = [
  "cadmpeg-container",
  "cadmpeg-core",
@@ -686,10 +701,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "cadmpeg-codec-rhino"
-version = "0.6.7"
+name = "cadmpeg-codec-iges"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd2b76bd1d9301c949fbd731fd22cff9d37d10d1f481c754b557c2187bd0171"
+checksum = "1046e958878d8d52df443b516bb275bb611a2853f5d91369888e8e7bfbc66a66"
+dependencies = [
+ "cadmpeg-core",
+ "cadmpeg-ir",
+ "memchr",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "cadmpeg-codec-rhino"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc9f134b98b6cb4aa9b32237596d4db9ad657c1b81c05265841447b4d164ba83"
 dependencies = [
  "cadmpeg-container",
  "cadmpeg-core",
@@ -706,9 +736,9 @@ dependencies = [
 
 [[package]]
 name = "cadmpeg-codec-step"
-version = "0.6.7"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3cbce33ed681a28b62d8b01ae64cca2b01f11f31b9a3e5e2455b9ffde915712"
+checksum = "02968bddd3770292f0b8bca2de8c309358021028ab54df817951bdd462e8de97"
 dependencies = [
  "base64 0.23.1",
  "cadmpeg-container",
@@ -718,14 +748,27 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
- "zip",
+]
+
+[[package]]
+name = "cadmpeg-codec-usd"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "382d92e3a553c226d9bd28dd0cb5ea84d84f4112c364cffa9b3706757e7bbeed"
+dependencies = [
+ "cadmpeg-container",
+ "cadmpeg-core",
+ "cadmpeg-ir",
+ "cadmpeg-tessellate",
+ "crc32fast",
+ "unicode-ident",
 ]
 
 [[package]]
 name = "cadmpeg-container"
-version = "0.6.7"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03f0d1c22b875294c5fbf4a4738aec8f8c0a4ad035eb28ece404f1dec21f371a"
+checksum = "f4ba0d9c310f46c3c626b1ec5b9e1a4db113eb711b65cd4ee4b41b53ac7742b1"
 dependencies = [
  "cadmpeg-core",
  "crc32fast",
@@ -735,14 +778,15 @@ dependencies = [
 
 [[package]]
 name = "cadmpeg-core"
-version = "0.6.7"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "795bdc6e2a10ecc0627138874c17e2948a3925cd22c6c6b0c2e4f6621d92f89c"
+checksum = "5f5b7d2834b48bd9929f8428bd511ca5e03d331d36e5f4fbcf20e93fde8e3498"
 dependencies = [
  "flate2",
  "memchr",
  "roxmltree",
  "ruzstd",
+ "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -750,12 +794,14 @@ dependencies = [
 
 [[package]]
 name = "cadmpeg-ir"
-version = "0.6.7"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5592036516aaf2574b159a86a3d1ae872dc245261de86e4c0ce6773fed00a249"
+checksum = "8f7ea9d8e4e61ef5a2d607d76eafd58f51813170090f89049d9ce0eedb733691"
 dependencies = [
  "base64 0.23.1",
  "cadmpeg-core",
+ "libm",
+ "schemars",
  "serde",
  "serde-value",
  "serde_json",
@@ -764,20 +810,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "cadmpeg-registry"
-version = "0.6.7"
+name = "cadmpeg-measure"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc163233d5f664337267192848505854de6aeed4843181adf87f58baddcee9a0"
+checksum = "3e891c8e87b0b0c1b8eabde1deb75351d9f51367c54368fd40637ff4151774bf"
 dependencies = [
- "cadmpeg-codec-freecad",
- "cadmpeg-codec-rhino",
- "cadmpeg-codec-step",
- "cadmpeg-container",
  "cadmpeg-core",
  "cadmpeg-ir",
  "serde",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "cadmpeg-registry"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b101aa07edb4e12a2b0afcf7d5583793ebd45a131422b956a4fd2f7bd22a275a"
+dependencies = [
+ "cadmpeg-codec-freecad",
+ "cadmpeg-codec-iges",
+ "cadmpeg-codec-rhino",
+ "cadmpeg-codec-step",
+ "cadmpeg-codec-usd",
+ "cadmpeg-container",
+ "cadmpeg-core",
+ "cadmpeg-ir",
+ "cadmpeg-measure",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
  "toml",
+]
+
+[[package]]
+name = "cadmpeg-tessellate"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3eb1cde284412b5389fb9e462321be8f05497e0b426d38be4dc9e46321e583f"
+dependencies = [
+ "cadmpeg-core",
+ "cadmpeg-ir",
 ]
 
 [[package]]
@@ -823,6 +895,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26b07d673db1ccf000e90f54b819db9e75a8348d6eb056e9b8ab53231b7a9911"
 dependencies = [
  "cipher",
+]
+
+[[package]]
+name = "cavalier_contours"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85e06038a969c5e4d93565f12b044814d3b1a48d50c4ef868d588e79956fea51"
+dependencies = [
+ "ahash",
+ "num-traits",
+ "smallvec",
+ "static_aabb2d_index",
 ]
 
 [[package]]
@@ -876,6 +960,19 @@ dependencies = [
  "cfg-if",
  "encoding_rs",
  "memchr",
+]
+
+[[package]]
+name = "chrono"
+version = "0.4.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
+dependencies = [
+ "iana-time-zone",
+ "js-sys",
+ "num-traits",
+ "wasm-bindgen",
+ "windows-link",
 ]
 
 [[package]]
@@ -1090,9 +1187,10 @@ dependencies = [
 
 [[package]]
 name = "craft-plugin"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
+ "image",
  "schemars",
  "serde",
  "serde_json",
@@ -1285,6 +1383,12 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
+
+[[package]]
+name = "data-url"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
 name = "dbl"
@@ -1492,8 +1596,7 @@ dependencies = [
 [[package]]
 name = "ecolor"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31bcbef0d4263a63eb32c4834e5d711613035ce1333468e107d928923e21e6e2"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "bytemuck",
  "emath",
@@ -1527,8 +1630,7 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c5642501a65ca657d05f00c643a5c14ff2346cb3818032bfe23d58e1f8e5f84"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1563,8 +1665,7 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bec9144f49b7a28b5f395d3147e325b4fe3e77ba686eac11d1bdf0a7da3f375f"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "accesskit",
  "ahash",
@@ -1583,7 +1684,7 @@ dependencies = [
 [[package]]
 name = "egui-wgpu"
 version = "0.37.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1602,8 +1703,7 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4e449f4c4a2a60c7ccb4ba7fa4078417bfe1f9ddc03b5e05ce75748e33a70de"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "accesskit_winit",
  "arboard",
@@ -1625,8 +1725,7 @@ dependencies = [
 [[package]]
 name = "egui_glow"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9275ca5cc35a6b7c94e0e8cedf22542f66cb0cf45ed8ab2657c78ff49fec7268"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "bytemuck",
  "egui",
@@ -1670,8 +1769,7 @@ dependencies = [
 [[package]]
 name = "emath"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e73ce90f54750be8672c02be0743fe47530e6f251e066f0ee2869b59eb297af5"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "bytemuck",
 ]
@@ -1734,8 +1832,7 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97bac86ae3dde93fc3951e790951caea739ff39a6c89d909cdaf1d9278dbb1bd"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1760,8 +1857,7 @@ dependencies = [
 [[package]]
 name = "epaint_default_fonts"
 version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfc1cc505827f4c23eedc297975a0fd038268d41293f389dd8ff3b574aefab19"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 
 [[package]]
 name = "equivalent"
@@ -2210,6 +2306,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "float-cmp"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2333,6 +2435,35 @@ dependencies = [
  "typenum",
  "version_check",
  "zeroize",
+]
+
+[[package]]
+name = "gerber-types"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42103f088f731446755617a73b8d3a80633bd447317e6e1661195abac35150aa"
+dependencies = [
+ "chrono",
+ "num-rational",
+ "strum",
+ "strum_macros",
+ "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
+name = "gerber_parser"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f675010c0dda2e38b3f276c45d96e743758929d4e6ae81052dcde35daf8dc1"
+dependencies = [
+ "anyhow",
+ "gerber-types",
+ "lazy-regex",
+ "log",
+ "regex",
+ "strum",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2683,6 +2814,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "iana-time-zone"
+version = "0.1.65"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e31bc9ad994ba00e440a8aa5c9ef0ec67d5cb5e5cb0cc7f8b744a35b389cc470"
+dependencies = [
+ "android_system_properties",
+ "core-foundation-sys",
+ "iana-time-zone-haiku",
+ "js-sys",
+ "log",
+ "wasm-bindgen",
+ "windows-core",
+]
+
+[[package]]
+name = "iana-time-zone-haiku"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "idea"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2712,6 +2867,12 @@ dependencies = [
  "zune-core",
  "zune-jpeg",
 ]
+
+[[package]]
+name = "imagesize"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65b27460c2c92b037f3f94c538ed9a3342f3fdf923606781629ccb35f82d042a"
 
 [[package]]
 name = "indexmap"
@@ -2752,6 +2913,42 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+
+[[package]]
+name = "jiff"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "107f2e89536b6818514025f6787b0d94d819e54fe3b40365275fc753de485b3f"
+dependencies = [
+ "jiff-core",
+ "jiff-static",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+ "windows-link",
+]
+
+[[package]]
+name = "jiff-core"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d44c923edf2bf456a982253f1a9ee1f6e89e421dffd0065d9b9a581da0def58f"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "jiff-static"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4996f71e569e3a3e32b925c28ef8f0027dc30bb1d594b33eeda409eea185f5c8"
+dependencies = [
+ "jiff-core",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
 
 [[package]]
 name = "jni"
@@ -2892,6 +3089,29 @@ dependencies = [
  "euclid",
  "polycool",
  "smallvec",
+]
+
+[[package]]
+name = "lazy-regex"
+version = "3.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0a2cce8a22920a29fdcc8c9170aa5d29edd9fbcf8bea856e24c2cb1c2419f67"
+dependencies = [
+ "lazy-regex-proc_macros",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "lazy-regex-proc_macros"
+version = "3.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f1e4b1f1d8c71edb4ff2b2150ec4606445fd2ddf67ddc097655daf59286baa6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -3763,6 +3983,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdf-writer"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5e456864a7a304047bff84977dc6fb162bd956475d40ba50b2dcecaada7f753"
+dependencies = [
+ "bitflags 2.13.2",
+ "itoa",
+ "memchr",
+ "ryu",
+]
+
+[[package]]
 name = "pem-rfc7468"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3914,6 +4146,12 @@ checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
 dependencies = [
  "siphasher",
 ]
+
+[[package]]
+name = "pico-args"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 
 [[package]]
 name = "pin-project"
@@ -4298,6 +4536,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex"
+version = "1.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9807af0e638c12e753aa1b4e601791bf2a8f71274023c8bbeec12fc149950857"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41d60ef07df457506a0a1a2073112eb4aae5733dbd2813c3da77d1b0fd441158"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d902046e6a28a1e4c3cab97258a0ce11e994903f01c2d97a9447a0b3df85f4f6"
+
+[[package]]
 name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4308,6 +4575,21 @@ name = "replace_with"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51743d3e274e2b18df81c4dc6caf8a5b8e15dbe799e0dca05c7617380094e884"
+
+[[package]]
+name = "resvg"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77bb4b284cf8a5c8ae721594af53387fb755d2196fddb32b2acfb4fa9251fa0c"
+dependencies = [
+ "bytemuck",
+ "log",
+ "pico-args",
+ "rgb",
+ "svgtypes",
+ "tiny-skia",
+ "usvg",
+]
 
 [[package]]
 name = "rfc6979"
@@ -4344,6 +4626,15 @@ dependencies = [
  "wayland-protocols",
  "web-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rgb"
+version = "0.8.53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]
@@ -4560,6 +4851,12 @@ checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
 dependencies = [
  "twox-hash",
 ]
+
+[[package]]
+name = "ryu"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "salsa20"
@@ -4941,6 +5238,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "simplecss"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a9c6883ca9c3c7c90e888de77b7a5c849c779d25d74a1269b0218b14e8b136c"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "siphasher"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5035,16 +5341,28 @@ dependencies = [
 [[package]]
 name = "solidcore"
 version = "1.0.1"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
 ]
 
 [[package]]
+name = "solidcore-cadir"
+version = "0.1.0"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
+dependencies = [
+ "cadmpeg-ir",
+ "solidcore",
+ "solidcore-ops",
+ "solidcore-record",
+ "solidcore-step",
+]
+
+[[package]]
 name = "solidcore-convert"
 version = "0.1.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "solidcore",
  "solidcore-record",
@@ -5053,8 +5371,9 @@ dependencies = [
 [[package]]
 name = "solidcore-ops"
 version = "0.1.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
+ "serde",
  "solidcore",
  "solidcore-convert",
  "solidcore-record",
@@ -5063,7 +5382,7 @@ dependencies = [
 [[package]]
 name = "solidcore-record"
 version = "0.1.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "serde",
  "serde_json",
@@ -5073,7 +5392,7 @@ dependencies = [
 [[package]]
 name = "solidcore-step"
 version = "0.1.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "solidcore",
  "solidcore-convert",
@@ -5084,7 +5403,7 @@ dependencies = [
 [[package]]
 name = "solidcore-tess"
 version = "0.1.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "rayon",
  "serde",
@@ -5097,13 +5416,13 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-color"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 
 [[package]]
 name = "solidcraft-control"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "getrandom 0.3.4",
  "serde",
@@ -5112,8 +5431,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-derive"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5121,14 +5440,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "solidcraft-display-units"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+name = "solidcraft-develop"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
+dependencies = [
+ "solidcore-ops",
+ "solidcore-record",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "solidcraft-doc"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "log",
  "serde",
@@ -5139,7 +5463,7 @@ dependencies = [
  "solidcore-tess",
  "solidcraft-color",
  "solidcraft-derive",
- "solidcraft-display-units",
+ "solidcraft-develop",
  "solidcraft-format",
  "solidcraft-geom",
  "solidcraft-kernel",
@@ -5152,13 +5476,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "solidcraft-dynamics"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
+dependencies = [
+ "serde",
+ "solidcore-record",
+ "solidcraft-geom",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "solidcraft-engine"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "craft-plugin",
  "image",
  "log",
+ "png",
+ "resvg",
  "schemars",
  "serde",
  "serde_json",
@@ -5169,22 +5506,27 @@ dependencies = [
  "solidcraft-color",
  "solidcraft-control",
  "solidcraft-doc",
+ "solidcraft-dynamics",
  "solidcraft-geom",
  "solidcraft-io",
  "solidcraft-kernel",
+ "solidcraft-panel-layout",
  "solidcraft-profile",
  "solidcraft-render",
  "solidcraft-sketch",
+ "solidcraft-ui-text",
  "solidcraft-viewport",
+ "solidcraft-views",
  "thiserror 2.0.21",
+ "tiny-skia",
  "toml_edit",
  "web-time",
 ]
 
 [[package]]
 name = "solidcraft-format"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",
@@ -5193,8 +5535,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-geom"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "serde",
  "solidcore",
@@ -5206,28 +5548,37 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-io"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "cadmpeg-core",
  "cadmpeg-ir",
  "cadmpeg-registry",
+ "cavalier_contours",
  "chardetng",
  "ciborium",
  "coset",
  "ed25519-dalek",
  "encoding_rs",
+ "flate2",
+ "gerber_parser",
  "gethostname",
  "gltf",
  "log",
+ "pdf-writer",
  "pgp",
+ "png",
  "quick-xml 0.41.0",
  "rustix 1.1.5",
+ "same-file",
  "serde",
  "serde_bytes",
  "serde_json",
  "sha2 0.10.9",
+ "solidcore-cadir",
+ "solidcore-ops",
  "solidcore-record",
+ "solidcore-step",
  "solidcore-tess",
  "solidcraft-color",
  "solidcraft-doc",
@@ -5236,14 +5587,19 @@ dependencies = [
  "solidcraft-kernel",
  "solidcraft-profile",
  "solidcraft-sketch",
+ "sysinfo",
+ "tempfile",
  "thiserror 2.0.21",
+ "tiny-skia",
+ "trash",
+ "unicode-normalization",
  "zip",
 ]
 
 [[package]]
 name = "solidcraft-kernel"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "log",
  "rayon",
@@ -5257,14 +5613,15 @@ dependencies = [
  "solidcraft-profile",
  "solidcraft-smlib",
  "spade",
+ "sysinfo",
  "thiserror 2.0.21",
  "web-time",
 ]
 
 [[package]]
 name = "solidcraft-look"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "egui",
  "log",
@@ -5274,9 +5631,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solidcraft-panel-layout"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "solidcraft-profile"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "serde_json",
  "web-time",
@@ -5284,8 +5652,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-render"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "image",
  "moxcms",
@@ -5306,11 +5674,13 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-sketch"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "harfrust",
  "serde",
+ "sha2 0.10.9",
+ "solidcore-ops",
  "solidcore-record",
  "solidcraft-geom",
  "thiserror 2.0.21",
@@ -5320,8 +5690,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-smlib"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "log",
  "serde_json",
@@ -5334,8 +5704,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-theme"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "egui",
  "serde",
@@ -5345,8 +5715,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-ui-kit"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "arboard",
  "egui",
@@ -5367,17 +5737,18 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-ui-registry"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "egui",
 ]
 
 [[package]]
 name = "solidcraft-ui-text"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
+ "flate2",
  "log",
  "serde_json",
  "sys-locale",
@@ -5386,8 +5757,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-viewport"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "image",
  "serde",
@@ -5398,8 +5769,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-viewport-egui"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "egui",
  "egui-wgpu",
@@ -5410,8 +5781,8 @@ dependencies = [
 
 [[package]]
 name = "solidcraft-viewport-gpu"
-version = "0.42.0"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "log",
  "pollster 0.4.0",
@@ -5422,6 +5793,17 @@ dependencies = [
  "solidcraft-viewport",
  "thiserror 2.0.21",
  "wgpu",
+]
+
+[[package]]
+name = "solidcraft-views"
+version = "0.48.1"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "solidcraft-viewport",
 ]
 
 [[package]]
@@ -5462,6 +5844,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "static_aabb2d_index"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a753368e4dd146a347d0ea692f0f8a37df18df7eee5659d36dd75eb287c6454"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5472,6 +5863,9 @@ name = "strict-num"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
+dependencies = [
+ "float-cmp",
+]
 
 [[package]]
 name = "strsim"
@@ -5480,10 +5874,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "svgtypes"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f12b12995e3638c70618c1facb1ce65302f6a6f706b675f07c58a5d7391120e"
+dependencies = [
+ "kurbo",
+ "siphasher",
+]
 
 [[package]]
 name = "syn"
@@ -5636,6 +6058,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "log",
+ "png",
  "tiny-skia-path",
 ]
 
@@ -5649,6 +6072,12 @@ dependencies = [
  "bytemuck",
  "strict-num",
 ]
+
+[[package]]
+name = "tinyvec"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
@@ -5743,6 +6172,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "trash"
+version = "5.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7363f9516b65bd2e855f4e6c3338b1a98efc2773c25349c958908897e1170ded"
+dependencies = [
+ "jiff",
+ "libc",
+ "log",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "once_cell",
+ "percent-encoding",
+ "scopeguard",
+ "urlencoding",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "tree_magic_mini"
 version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5825,6 +6273,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
+name = "unicode-normalization"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "unicode-properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5890,6 +6347,31 @@ dependencies = [
  "http",
  "httparse",
  "log",
+]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
+
+[[package]]
+name = "usvg"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdb896f04730b97805bbc3191fc57e4bf03face0f14577dd42e783c4d8c98802"
+dependencies = [
+ "data-url",
+ "imagesize",
+ "kurbo",
+ "log",
+ "pico-args",
+ "roxmltree",
+ "simplecss",
+ "siphasher",
+ "strict-num",
+ "svgtypes",
+ "tiny-skia-path",
 ]
 
 [[package]]
@@ -6679,7 +7161,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/tangency-labs/solidcraft?rev=1b1e940cc48e4d1d5d01971a4be20e2e55647066#1b1e940cc48e4d1d5d01971a4be20e2e55647066"
+source = "git+https://github.com/tangency-labs/solidcraft?rev=e5bc9288aab2f6f1d8661afc6d9702d75a6e171e#e5bc9288aab2f6f1d8661afc6d9702d75a6e171e"
 dependencies = [
  "ahash",
  "android-activity",

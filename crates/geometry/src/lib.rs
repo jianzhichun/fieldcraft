@@ -340,8 +340,10 @@ impl Shape {
             let v = if self.face_map.is_empty() { Some(face) } else { self.face_map.get(face).map(|&v| v as usize) };
             v.and_then(|v| self.faces.get(v)).map_or_else(|| format!("#{face}"), |f| format!("`{}`", f.name))
         };
-        // A face a bound limited is listed whether or not it met the tolerance after all.
-        let off: Vec<_> = stats.over_tolerance.iter().filter(|f| !f.within).collect();
+        // A face a bound limited is listed whether or not it met the tolerance after all. So is a
+        // face with no bound (`caps` empty) whose displaced shared boundary leaves it over: SolidCraft
+        // 0.44 lists those too, and an enclosure's corner faces are among them, meshed all the same.
+        let off: Vec<_> = stats.over_tolerance.iter().filter(|f| !f.within && !f.caps.is_empty()).collect();
         if let Some(f) = off.first() {
             return Err(Error::Failed(format!(
                 "SolidCraft could not mesh {} of the faces of body `{}` within the tessellation tolerance (face {} first)",
@@ -350,7 +352,7 @@ impl Shape {
                 name(f.face)
             )));
         }
-        let (m, refused) = plan.welded();
+        let (m, refused) = plan.welded().map_err(|e| Error::Failed(format!("SolidCraft could not join the faces of body `{}`: {e}", self.name)))?;
         if let Some(f) = refused.first() {
             return Err(Error::Failed(format!(
                 "SolidCraft could not triangulate {} of the faces of body `{}` (face {} first: {})",

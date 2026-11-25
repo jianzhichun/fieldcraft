@@ -324,6 +324,10 @@ impl History {
         let point = |p: &[solidcraft_doc::Expr; 3]| -> Option<[f64; 3]> {
             Some([eval(&p[0], Kind::Length)?, eval(&p[1], Kind::Length)?, eval(&p[2], Kind::Length)?])
         };
+        // A direction's components are unitless expressions, evaluated as the parameters stand.
+        let direction = |d: &[solidcraft_doc::Expr; 3]| -> Option<[f64; 3]> {
+            Some([eval(&d[0], Kind::Unitless)?, eval(&d[1], Kind::Unitless)?, eval(&d[2], Kind::Unitless)?])
+        };
         let sketch_of = |id: solidcraft_doc::SketchId| self.state.sketch(*id);
         let mut node = FeatureNode {
             id: f.id,
@@ -375,7 +379,7 @@ impl History {
             FeatureKind::Cylinder { base, axis, operation, .. } => {
                 node.operation = Some(operation_name(*operation).into());
                 node.placement = point(base);
-                node.direction = unit(xyz(**axis));
+                node.direction = direction(axis).and_then(unit);
             }
             FeatureKind::Sphere { center, operation, .. } | FeatureKind::Torus { center, operation, .. } => {
                 node.operation = Some(operation_name(*operation).into());
