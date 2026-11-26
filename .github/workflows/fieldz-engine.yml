@@ -30,6 +30,7 @@ jobs:
         with:
           key: fieldz-engine-${{ matrix.platform }}
           cache-on-failure: true
+          save-if: true
       - name: Linux build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libvulkan1 mesa-vulkan-drivers
