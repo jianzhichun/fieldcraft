@@ -547,6 +547,26 @@ pub fn install_look() {
     solidcraft_look::themes::install();
 }
 
+/// The bundled Chinese face: Noto Sans CJK SC, subset to the CJK basic block, the ideographic punctuation and ASCII
+/// (SIL OFL 1.1, `fonts/OFL-NotoSansCJK.txt`). Added last in every family, so the Latin faces stay IBM Plex and a
+/// character they lack falls through to it instead of drawing an empty box.
+static NOTO_CJK_SC: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/NotoSansCJKsc-Subset.otf"));
+
+/// The kit's faces with the Chinese fallback appended, installed into `ctx` (the look crate's own extension point).
+fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = solidcraft_look::fonts::definitions();
+    fonts.font_data.insert("noto-sans-cjk-sc".to_owned(), std::sync::Arc::new(egui::FontData::from_static(NOTO_CJK_SC)));
+    let mut families: Vec<egui::FontFamily> = vec![egui::FontFamily::Proportional, egui::FontFamily::Monospace];
+    families.extend(solidcraft_ui_kit::type_face::sans_families());
+    for family in families {
+        let list = fonts.families.entry(family).or_default();
+        if !list.iter().any(|n| n == "noto-sans-cjk-sc") {
+            list.push("noto-sans-cjk-sc".to_owned());
+        }
+    }
+    solidcraft_look::fonts::apply(ctx, fonts);
+}
+
 /// Style the context for the dark or light theme: SolidCraft's look installed in the kit, with
 /// FieldCraft's tokens (its teal accent on SolidCraft's chrome) and teal icon accents; the kit's
 /// visuals from them, and SolidCraft's interface faces (IBM Plex). egui draws selected labels'
@@ -556,7 +576,7 @@ pub fn apply(ctx: &egui::Context, dark: bool) {
     kit_theme::set_dark(dark);
     kit_theme::set_custom(Some(kit_theme::Custom { dark, tokens: kit(dark) }));
     kit_icons::set_theme_palette(Some((dark, icon_palette(dark))));
-    solidcraft_look::fonts::install(ctx);
+    install_fonts(ctx);
     kit_theme::apply(ctx);
     let (k, ink) = (kit(dark), Tokens::get(dark).accent_ink);
     ctx.global_style_mut(|s| {
