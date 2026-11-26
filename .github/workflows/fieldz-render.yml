@@ -29,6 +29,8 @@ jobs:
         with:
           key: fieldz-render-${{ matrix.platform }}
           cache-on-failure: true
+          # ours: a tag build never matches the action's default (main/master only), so without this every release is a cold build
+          save-if: true
       - name: THIRD-PARTY-LICENSES.txt
         run: cargo xtask licences
       - name: Build the render server
