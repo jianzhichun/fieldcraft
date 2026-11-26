@@ -175,6 +175,10 @@ impl Host {
         // The host's window shows the workspace, not the desktop app's community and updater
         // chrome: no Donate/Discord, Report a bug, Update offer or version in the bar.
         let mut app = ModelApp::new(session).with_embedded();
+        // The app draws its own chrome from `ui.dark`: it must start in the host's theme, not the
+        // desktop app's dark default (`--theme light` would otherwise draw the dark theme's ink on
+        // its light panels).
+        app.ui.dark = cfg.dark;
         if let Some(rs) = painter.render_state() {
             // The whole-window pass is 1 sample with a depth buffer (the viewport's pipelines
             // expect one); the 3D viewport paints into this same pass.
@@ -541,6 +545,9 @@ impl Host {
             return;
         }
         self.cfg.dark = dark;
+        // Every drawer reads this: the kit's panels, the app's own chrome and the tab labels. Applying
+        // only the context left the app's labels in the previous theme's ink (white on light panels).
+        self.app.ui.dark = dark;
         fieldcraft_ui_egui::theme::apply(&self.ctx, dark);
         self.painter.set_dark(dark);
         self.need_full = true;
@@ -927,6 +934,10 @@ mod tests {
         write_message(&mut out, &json!({"t":"call","id":4,"method":"ui.theme"}), &[]).unwrap();
         let reply = read_reply(&mut client, &mut out, 4);
         assert_eq!(reply["result"]["dark"], false, "ui.theme follows the change");
+        // The app's own drawers read `ui.dark`: it must follow too, or they keep the previous theme's ink.
+        write_message(&mut out, &json!({"t":"call","id":6,"method":"ui.inspect"}), &[]).unwrap();
+        let reply = read_reply(&mut client, &mut out, 6);
+        assert_eq!(reply["result"]["ui"]["dark"], false, "the app's own chrome follows the theme");
 
         write_message(&mut out, &json!({"t":"stop","why":"test"}), &[]).unwrap();
         let (bye, _) = read_type(&mut client, &mut out, "bye");
