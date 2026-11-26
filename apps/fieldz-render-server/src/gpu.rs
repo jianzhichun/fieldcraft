@@ -2,8 +2,9 @@
 //! without a surface (its target format is `Rgba8Unorm`), the offscreen colour and depth
 //! targets, and one egui pass drawn into them.
 //!
-//! The pass is 1 sample with no egui depth (`RendererOptions { msaa_samples: 1,
-//! depth_stencil_format: None }`); a `Depth24Plus` attachment is still there for the 3D
+//! The pass is 1 sample and carries the `Depth24Plus` attachment the viewport's pipelines expect,
+//! so the egui renderer is built for that same attachment (`RendererOptions { msaa_samples: 1,
+//! depth_stencil_format: Some(Depth24Plus) }`)
 //! viewport's pipelines, which `ModelApp::set_wgpu` installs with the same target (depth 24,
 //! 1 sample). The app's clear colour is the theme's panel, so parts a widget does not cover
 //! look like the desktop window.
@@ -30,7 +31,7 @@ pub fn render_state(policy: select::Policy) -> Result<egui_wgpu::RenderState, St
         wgpu_setup: egui_wgpu::WgpuSetup::Existing(egui_wgpu::WgpuSetupExisting { instance: instance.clone(), adapter, device, queue }),
         ..Default::default()
     };
-    let options = egui_wgpu::RendererOptions { msaa_samples: 1, depth_stencil_format: None, ..Default::default() };
+    let options = egui_wgpu::RendererOptions { msaa_samples: 1, depth_stencil_format: Some(wgpu::TextureFormat::Depth24Plus), ..Default::default() };
     let state =
         pollster::block_on(egui_wgpu::RenderState::create(&config, &instance, None, options)).map_err(|e| format!("egui-wgpu's RenderState: {e}"))?;
     if state.target_format != wgpu::TextureFormat::Rgba8Unorm {
