@@ -31,6 +31,7 @@ pub mod history;
 pub mod linearise;
 pub mod path;
 pub mod progress;
+pub mod read_only;
 pub mod requirement;
 pub mod results;
 pub mod sample;
@@ -88,6 +89,10 @@ pub enum EngineError {
     /// in the display units at the command's boundary ([`EngineError::shown`]).
     #[error("{context}: {source}")]
     Context { context: String, source: Box<EngineError> },
+    /// Refused by the host's read-only mode ([`read_only`]): nothing was done, or what the
+    /// command changed was undone.
+    #[error("read-only: {reason} (`{command}`)")]
+    Disabled { reason: String, command: String },
 }
 
 impl EngineError {
@@ -433,6 +438,11 @@ impl Session {
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         // An id from hostile input is not echoed in full.
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.chars().take(100).collect()))?;
+        // A host that opened the session read-only refuses the commands that write without a
+        // snapshot to restore ([`read_only`]); nothing is journalled or timed.
+        if let Some(reason) = read_only::blocked(spec.id) {
+            return Err(EngineError::Disabled { reason, command: spec.id.to_string() });
+        }
         let timer = usage::Timer::start(self.origin);
         let elements = self.model.elements().len();
         let progress = solver_diagnostic::is_solve(id).then(|| {
@@ -505,6 +515,17 @@ impl Session {
                 log::error!("command {id} panicked: {message}");
                 Err(EngineError::Internal { command: id.to_string(), message })
             }
+        };
+        // Read-only: a Model command that changed the document is undone by the error path below
+        // (`Session::restore`) and journalled as a failure, so a crash replay never repeats it.
+        let result = match read_only::reason() {
+            Some(reason) if result.is_ok() => match &before {
+                Some((before, document)) if before.document.is_some() || self.document() != *document || self.differs_from(before) => {
+                    Err(EngineError::Disabled { reason, command: id.to_string() })
+                }
+                _ => result,
+            },
+            _ => result,
         };
         if let Some((mut before, document)) = before {
             // A command that makes the session another document (a new model) keeps the old

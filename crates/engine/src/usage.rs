@@ -168,6 +168,7 @@ pub fn error_class(e: &EngineError) -> &'static str {
         EngineError::Explicit(_) => "explicit",
         EngineError::Fluid(_) => "fluid",
         EngineError::Unavailable(_) => "unavailable",
+        EngineError::Disabled { .. } => "disabled",
         EngineError::Internal { .. } => "internal",
         EngineError::Context { source, .. } => error_class(source),
     }

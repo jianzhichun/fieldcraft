@@ -36,3 +36,5 @@ sysinfo = { workspace = true }
 [dev-dependencies]
 png = { workspace = true }
 zip = { workspace = true }
+# Integration tests make JSON params and read the crash journal (already a dependency).
+serde_json = { workspace = true }
