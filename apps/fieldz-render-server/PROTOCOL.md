@@ -42,9 +42,11 @@ Events (`"k"`):
 
 | `k` | fields | egui result (through `fieldcraft_ui_egui::control`) |
 |---|---|---|
-| `move` | `x`, `y` (CSS points) | `ui.move` → one `Event::PointerMoved(pos)` |
-| `button` | `x`, `y`, `button` (`"left"`/`"right"`/`"middle"`), `down`, `double`, `modifiers` | `ui.click` → `PointerMoved` + `PointerButton{pressed:true}` + `PointerButton{pressed:false}`; `double:true` repeats the pair. **A `button` is a whole click**: with `down:false` it is accepted and ignored, so a host sends one `button` per click and uses `drag` for drags. |
-| `wheel` | `x`, `y`, `dx`, `dy`, `unit`, `modifiers` | `ui.scroll` → `PointerMoved` + `Event::MouseWheel { unit: Line, delta: (0, dy), phase: Move, source: Wheel }`. `dy` is egui's delta in lines (positive = down/in); `dx` and `unit` are accepted and dropped in v1 (`ui.scroll` is vertical). |
+| `move` | `x`, `y` (CSS points) | `ui.move` → one `Event::PointerMoved(pos)`. This is the live drag's move: the pointer moves whether or not a button is held. Several moves queued before a pass are delivered in order, up to 64 a pass. |
+| `press` | `x`, `y`, `button` (`"left"`/`"right"`/`"middle"`), `modifiers` | `Event::PointerButton{pressed:true}` at `(x, y)`, queued for the next pass (the app puts `PointerMoved` at that point before it). **Not** `ui.click`: with the `move`s between, this is how a live drag is streamed. |
+| `release` | `x`, `y`, `button`, `modifiers` | `Event::PointerButton{pressed:false}` at `(x, y)`, queued for the next pass. A press and its release land in different passes when they arrive apart. |
+| `button` | `x`, `y`, `button` (`"left"`/`"right"`/`"middle"`), `down`, `double`, `modifiers` | `ui.click` → `PointerMoved` + `PointerButton{pressed:true}` + `PointerButton{pressed:false}`; `double:true` repeats the pair. **A `button` is a whole click**: with `down:false` it is accepted and ignored, so a host sends one `button` per click, and a `button` that follows no `press` still means a whole click. A host that streams `press`/`release` does not also send `button` for that gesture. |
+| `wheel` | `x`, `y`, `dx`, `dy`, `unit`, `modifiers` | `ui.scroll` → `PointerMoved` + `Event::MouseWheel { unit: Line, delta: (0, dy), phase: Move, source: Wheel }`. `dy` is egui's delta in lines (positive = down/in); `dx` and `unit` are accepted and dropped in v1 (`ui.scroll` is vertical). A wheel is applied alone in its own pass, never batched behind other input. |
 | `key` | `key`, `physical`, `down`, `modifiers` | `ui.key` → `Event::Key{pressed:true}` + `Event::Key{pressed:false}` with the same modifiers. `key` is an `egui::Key` name (`"A"`, `"ArrowDown"`, `"Escape"`, `"Enter"`, `"Delete"`, `"Space"`, `"Tab"`, …). **A whole tap**: `down:false` is ignored. `physical` is accepted and unused in v1 (`ui.key` sends no physical key). |
 | `text` | `text` | `ui.text` → `Event::Text(text)` |
 | `drag` | `from:[x,y]`, `to:[x,y]`, `steps`, `button`, `modifiers` | `ui.drag` → `PointerMoved(from)`, press, `steps` (1..=200, default 10) interpolated `PointerMoved`s, release at `to` |
@@ -57,9 +59,11 @@ macOS and `ctrl` elsewhere, `ctrl` is `ctrl`. For pointer events `ui.click`/`ui.
 `shift`, `ctrl` and `alt`; `meta` is not carried by those methods in v1, and `alt` is not
 carried by `ui.key`. These are the control methods' existing shapes, not newly invented rules.
 
-The app's `raw_input_hook` then feeds egui at most one pointer event (or one key sequence) per
-pass, adding `ModifiersChanged` as egui expects; a pointer press's modifiers hold until its
-release.
+The app's `raw_input_hook` then feeds egui at most one press or release (or one key sequence)
+per pass, and a run of up to 64 `PointerMoved`s in order in one pass; a wheel gets a pass of
+its own. It adds `ModifiersChanged` as egui expects, and a pointer press's modifiers hold until
+its release. So a `press`, the `move`s between and its `release` reach egui in that order, with
+the press and release always in different passes when they arrive apart.
 
 ### `resize`
 

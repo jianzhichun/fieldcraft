@@ -2431,19 +2431,22 @@ impl ModelApp {
         }
     }
 
-    /// Inject synthetic events: one pointer event per frame (egui reads a press and release in
-    /// the same frame as a click, but a drag needs frames between its moves), keys up to their
-    /// release. First, a press the OS took for a window move or resize is released where it
+    /// Inject synthetic events: pointer moves in order (a live drag's moves arrive together, up to
+    /// 64 a pass like the control drain), one press or release a pass, a wheel alone, keys up to
+    /// their release. First, a press the OS took for a window move or resize is released where it
     /// began (the OS may keep that release from the app, X11; see the kit's window chrome).
     pub fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         titlebar::release_press_taken_by_os(ctx, raw);
         self.driven = !self.synthetic.is_empty();
         let Some(first) = self.synthetic.first() else { return };
         let n = match first {
-            egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. } | egui::Event::MouseWheel { .. } => 1,
+            // Consecutive moves are one live drag's path: deliver what arrived, in order. Stop at
+            // a button so its press and release each get a pass of their own.
+            egui::Event::PointerMoved(_) => self.synthetic.iter().take(64).take_while(|e| matches!(e, egui::Event::PointerMoved(_))).count(),
+            egui::Event::PointerButton { .. } | egui::Event::MouseWheel { .. } => 1,
             _ => self.synthetic.iter().position(|e| matches!(e, egui::Event::Key { pressed: false, .. })).map_or(self.synthetic.len(), |i| i + 1),
         };
-        if let egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } = first {
+        if let egui::Event::PointerButton { pos: p, .. } = first {
             raw.events.push(egui::Event::PointerMoved(*p));
         }
         // egui keeps the modifier keys as input state, changed by their own event.

@@ -8,12 +8,17 @@
 //! this server.
 //!
 //! v1 contracts (PROTOCOL.md):
-//! - `button` is a whole click: the control method produces the press and the release, so a
-//!   `button` with `down: false` is accepted and ignored (send one `button` per click).
+//! - `press` and `release` are the two halves of a live pointer gesture: they queue an
+//!   `egui::Event::PointerButton` (pressed / released) for the next pass, never `ui.click`.
+//!   `move` carries the pointer while a button is held. They arrive as they happen, so the
+//!   app sees a drag frame by frame instead of one whole-drag jump.
+//! - `button` is still a whole click: the control method produces the press and the release, so
+//!   a `button` with `down: false` is accepted and ignored (send one `button` per click). A
+//!   host that sends `press`/`release` should not send `button` for the same gesture.
 //! - `key` is a whole tap for the same reason; `down: false` is ignored. `physical` is
 //!   accepted but unused in v1 (`ui.key` sends no physical key).
 //! - `wheel` carries egui's `delta` in lines; `dx` is accepted and dropped (`ui.scroll`
-//!   scrolls vertically only in v1).
+//!   scrolls vertically only in v1). A wheel is applied alone in its own pass.
 //! - `focus` is not a control call: it sets `RawInput.focused`, which the host loop owns.
 
 use fieldcraft_ui_egui::ModelApp;
@@ -38,8 +43,26 @@ pub struct Modifiers {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "k", rename_all = "lowercase")]
 pub enum InputEvent {
-    /// Pointer moved to `(x, y)` in CSS points.
+    /// Pointer moved to `(x, y)` in CSS points, whether a button is held or not.
     Move { x: f32, y: f32 },
+    /// A button went down at `(x, y)`: the first half of a live click or drag.
+    Press {
+        x: f32,
+        y: f32,
+        #[serde(default)]
+        button: Option<String>,
+        #[serde(default)]
+        modifiers: Modifiers,
+    },
+    /// A button came up at `(x, y)`: the second half.
+    Release {
+        x: f32,
+        y: f32,
+        #[serde(default)]
+        button: Option<String>,
+        #[serde(default)]
+        modifiers: Modifiers,
+    },
     /// A whole click at `(x, y)`: press and release.
     Button {
         x: f32,
@@ -111,6 +134,14 @@ pub fn apply(app: &mut ModelApp, ctx: &egui::Context, event: &InputEvent) -> Opt
             call(app, ctx, "ui.move", json!({ "x": x, "y": y }));
             None
         }
+        InputEvent::Press { x, y, button, modifiers } => {
+            push_button(app, *x, *y, button.as_deref(), true, *modifiers);
+            None
+        }
+        InputEvent::Release { x, y, button, modifiers } => {
+            push_button(app, *x, *y, button.as_deref(), false, *modifiers);
+            None
+        }
         InputEvent::Button { x, y, button, down, double, modifiers } => {
             if *down {
                 let mut params = json!({ "x": x, "y": y, "double": double });
@@ -159,6 +190,31 @@ pub fn apply(app: &mut ModelApp, ctx: &egui::Context, event: &InputEvent) -> Opt
     }
 }
 
+/// Queue a live pointer button event. The app's `raw_input_hook` feeds it to egui in its own
+/// pass (preceded by the pointer at that point), so a press and a release never share one.
+fn push_button(app: &mut ModelApp, x: f32, y: f32, button: Option<&str>, pressed: bool, modifiers: Modifiers) {
+    app.synthetic.push(egui::Event::PointerButton {
+        pos: egui::pos2(x, y),
+        button: pointer_button(button),
+        pressed,
+        modifiers: pointer_mods(modifiers),
+    });
+}
+
+fn pointer_button(name: Option<&str>) -> egui::PointerButton {
+    match name {
+        Some("right") => egui::PointerButton::Secondary,
+        Some("middle") => egui::PointerButton::Middle,
+        _ => egui::PointerButton::Primary,
+    }
+}
+
+/// egui's modifiers for a pointer event: `command` is meta on macOS and ctrl elsewhere, as `ui.key`.
+fn pointer_mods(m: Modifiers) -> egui::Modifiers {
+    let command = if cfg!(target_os = "macos") { m.meta } else { m.ctrl };
+    egui::Modifiers { shift: m.shift, ctrl: m.ctrl, alt: m.alt, command, ..Default::default() }
+}
+
 fn put<T: Serialize>(params: &mut Value, key: &str, value: &Option<T>) {
     if let Some(v) = value {
         params[key] = json!(v);
@@ -198,6 +254,66 @@ mod tests {
         let (mut app, ctx) = app();
         let directives = events.iter().map(|e| apply(&mut app, &ctx, e)).collect();
         (app, ctx, directives)
+    }
+
+    /// Run `raw_input_hook` until its queue is empty, recording each pass's events.
+    fn passes(app: &mut ModelApp, ctx: &egui::Context) -> Vec<Vec<egui::Event>> {
+        let mut out = Vec::new();
+        while !app.synthetic.is_empty() {
+            let mut raw = egui::RawInput::default();
+            app.raw_input_hook(ctx, &mut raw);
+            out.push(raw.events);
+        }
+        out
+    }
+
+    /// The pointer and button events of a pass: `ModifiersChanged` is egui bookkeeping, not the
+    /// gesture.
+    fn pointer(events: &[egui::Event]) -> Vec<egui::Event> {
+        events.iter().filter(|e| matches!(e, egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. })).cloned().collect()
+    }
+
+    fn moved(x: f32, y: f32) -> egui::Event {
+        egui::Event::PointerMoved(egui::pos2(x, y))
+    }
+
+    #[test]
+    fn a_live_press_moves_and_release_keep_their_order_across_passes() {
+        let (mut app, ctx) = app();
+        let mut all: Vec<Vec<egui::Event>> = Vec::new();
+        let mut record = |app: &mut ModelApp| {
+            for pass in passes(app, &ctx) {
+                all.push(pointer(&pass));
+            }
+        };
+        let press = InputEvent::Press { x: 10.0, y: 20.0, button: Some("left".into()), modifiers: Modifiers::default() };
+        let release = InputEvent::Release { x: 50.0, y: 20.0, button: Some("left".into()), modifiers: Modifiers::default() };
+        apply(&mut app, &ctx, &press);
+        record(&mut app);
+        apply(&mut app, &ctx, &InputEvent::Move { x: 30.0, y: 20.0 });
+        record(&mut app);
+        apply(&mut app, &ctx, &InputEvent::Move { x: 50.0, y: 20.0 });
+        record(&mut app);
+        apply(&mut app, &ctx, &release);
+        record(&mut app);
+
+        let button = |pos: egui::Pos2, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::default(),
+        };
+        // The presses are direct egui events, not `ui.click`; the moves between are delivered in
+        // order, one pass each; the press and the release never share a pass.
+        assert_eq!(
+            all,
+            vec![
+                vec![moved(10.0, 20.0), button(egui::pos2(10.0, 20.0), true)],
+                vec![moved(30.0, 20.0)],
+                vec![moved(50.0, 20.0)],
+                vec![moved(50.0, 20.0), button(egui::pos2(50.0, 20.0), false)],
+            ]
+        );
     }
 
     #[test]
@@ -299,6 +415,60 @@ mod tests {
             egui::Event::PointerMoved(p) => assert_eq!(*p, egui::pos2(10.0, 0.0)),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn a_whole_click_still_works() {
+        let (mut app, ctx) = app();
+        apply(&mut app, &ctx, &InputEvent::Button { x: 5.0, y: 6.0, button: None, down: true, double: false, modifiers: Modifiers::default() });
+        let button = |pressed| egui::Event::PointerButton {
+            pos: egui::pos2(5.0, 6.0),
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::default(),
+        };
+        // The control method still produces the whole click: move, press, release, each its own pass.
+        let seq: Vec<Vec<egui::Event>> = passes(&mut app, &ctx).iter().map(|p| pointer(p)).collect();
+        assert_eq!(seq, vec![vec![moved(5.0, 6.0)], vec![moved(5.0, 6.0), button(true)], vec![moved(5.0, 6.0), button(false)]]);
+    }
+
+    #[test]
+    fn a_live_drag_delivers_at_most_64_moves_a_pass_in_order() {
+        let (mut app, ctx) = app();
+        for i in 0..70 {
+            apply(&mut app, &ctx, &InputEvent::Move { x: i as f32, y: 0.0 });
+        }
+        let passes = passes(&mut app, &ctx);
+        assert_eq!(passes.len(), 2, "70 moves are two passes");
+        let positions = |p: &[egui::Event]| -> Vec<f32> {
+            pointer(p)
+                .into_iter()
+                .filter_map(|e| match e {
+                    egui::Event::PointerMoved(p) => Some(p.x),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(positions(&passes[0]), (0..64).map(|i| i as f32).collect::<Vec<_>>());
+        assert_eq!(positions(&passes[1]), (64..70).map(|i| i as f32).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn wire_press_and_release_map_to_pointer_buttons() {
+        let press: InputEvent = serde_json::from_value(json!({"k":"press","x":1.0,"y":2.0,"button":"right","modifiers":{"shift":true}})).unwrap();
+        assert_eq!(
+            press,
+            InputEvent::Press { x: 1.0, y: 2.0, button: Some("right".into()), modifiers: Modifiers { shift: true, ..Default::default() } }
+        );
+        let (app, _, _) = apply_all(&[press]);
+        match &app.synthetic[..] {
+            [egui::Event::PointerButton { button: egui::PointerButton::Secondary, pressed: true, modifiers, .. }] => assert!(modifiers.shift),
+            other => panic!("{other:?}"),
+        }
+        let release: InputEvent = serde_json::from_value(json!({"k":"release","x":1.0,"y":2.0})).unwrap();
+        assert_eq!(release, InputEvent::Release { x: 1.0, y: 2.0, button: None, modifiers: Modifiers::default() });
+        let (app, _, _) = apply_all(&[release]);
+        assert!(matches!(app.synthetic[..], [egui::Event::PointerButton { pressed: false, .. }]));
     }
 
     #[test]
