@@ -66,6 +66,9 @@ pub const TABLE: &[(&str, Class)] = &[
     ("fieldcraft", Class::Exempt),
     ("cli", Class::Exempt),
     ("web", Class::Exempt),
+    // The frame-streamed render server (docs/fieldz-render-server.md). `short_name` strips only
+    // the `fieldcraft-` prefix, so the key is the whole package name.
+    ("fieldz-render-server", Class::Exempt),
     ("xtask", Class::Exempt),
 ];
 

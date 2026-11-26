@@ -1,0 +1,25 @@
+[package]
+name = "fieldz-render-server"
+description = "A windowless FieldCraft window streamed over loopback TCP: frames out, input and engine calls in (docs/fieldz-render-server.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fieldcraft-engine = { workspace = true }
+fieldcraft-gpu = { workspace = true }
+fieldcraft-render = { workspace = true }
+fieldcraft-ui-egui = { workspace = true }
+egui = { workspace = true }
+egui-wgpu = { workspace = true }
+wgpu = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+pollster = { workspace = true }
+image = { workspace = true }
+rayon = "1.12"
