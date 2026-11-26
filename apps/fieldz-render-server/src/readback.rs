@@ -1,8 +1,19 @@
 //! Reading a rendered texture back: rows in a `copy_texture_to_buffer` must start on a
 //! [`COPY_ALIGN`]-byte boundary, so the mapped range is unpadded into tightly packed RGBA.
 
+use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
+
 /// `wgpu`'s copy row alignment.
 pub const COPY_ALIGN: usize = 256;
+
+/// How long a frame's GPU work may take before the pass fails. A lost device used to leave
+/// `poll(Wait)` blocked for ever, freezing the only thread that draws; a bounded wait turns
+/// that into an error [`frame_once`](crate::host::Host) propagates out of the loop.
+pub const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The error a pass returns when the device did not finish in [`WAIT_TIMEOUT`].
+pub const TIMEOUT: &str = "GPU did not finish the frame";
 
 /// The bytes per row a `w`-pixel RGBA texture is copied with.
 pub fn padded_row(width: u32) -> u32 {
@@ -47,15 +58,38 @@ pub fn read_texture(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::
     let slice = buffer.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
     slice.map_async(wgpu::MapMode::Read, move |r| {
-        let _ = tx.send(r);
+        let _ = tx.send(r.map_err(|e| e.to_string()));
     });
-    device.poll(wgpu::PollType::wait_indefinitely()).map_err(|e| e.to_string())?;
-    rx.recv().map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+    wait_for_map(&rx, WAIT_TIMEOUT, |timeout| device.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(timeout) }))?;
     let mapped = slice.get_mapped_range().map_err(|e| e.to_string())?;
     let pixels = unpad(&mapped, w, h, row);
     drop(mapped);
     buffer.unmap();
     pixels
+}
+
+/// Wait for a `map_async` callback after one bounded poll. `poll` drives the device for up to
+/// `timeout`; when it or the callback takes longer, the pass fails with [`TIMEOUT`] instead of
+/// blocking the only thread that draws.
+pub fn wait_for_map(
+    rx: &Receiver<Result<(), String>>,
+    timeout: Duration,
+    poll: impl FnOnce(Duration) -> Result<wgpu::PollStatus, wgpu::PollError>,
+) -> Result<(), String> {
+    let started = Instant::now();
+    match poll(timeout) {
+        Ok(_) => {}
+        // The device did not finish the work it was asked for in time.
+        Err(wgpu::PollError::Timeout) => return Err(TIMEOUT.into()),
+        Err(e) => return Err(e.to_string()),
+    }
+    // The poll may have spent some of the window; the callback gets what is left.
+    let left = timeout.saturating_sub(started.elapsed());
+    match rx.recv_timeout(left) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err(TIMEOUT.into()),
+    }
 }
 
 #[cfg(test)]
@@ -98,5 +132,22 @@ mod tests {
         assert!(unpad(&[0; 8], 4, 1, 8).is_err());
         assert!(unpad(&[0; 8], 2, 2, 8).is_err());
         assert!(unpad(&[0; 16], 2, 2, 8).is_ok());
+    }
+
+    #[test]
+    fn a_map_that_never_answers_times_out() {
+        // The sender stays alive, so the error is the timeout, not a disconnect.
+        let (_tx, rx) = std::sync::mpsc::channel();
+        let started = Instant::now();
+        let err = wait_for_map(&rx, Duration::from_millis(50), |_| Ok(wgpu::PollStatus::Poll)).unwrap_err();
+        assert_eq!(err, TIMEOUT);
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn a_poll_that_runs_out_of_time_is_the_same_error() {
+        let (_tx, rx) = std::sync::mpsc::channel();
+        let err = wait_for_map(&rx, Duration::from_secs(1), |_| Err(wgpu::PollError::Timeout)).unwrap_err();
+        assert_eq!(err, TIMEOUT);
     }
 }

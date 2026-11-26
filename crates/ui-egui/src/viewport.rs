@@ -605,6 +605,8 @@ fn paint_gpu(app: &mut ModelApp, ui: &egui::Ui, painter: &egui::Painter, rect: R
         overlay_key,
         overlay_slot: app.viewport.overlay_slot.clone(),
         frame: Frame::of(&cam, rect.width() * ppp, rect.height() * ppp, radius),
+        errors: app.viewport.gpu_errors.clone(),
+        ctx: ui.ctx().clone(),
     };
     painter.add(egui_wgpu::Callback::new_paint_callback(rect, cb));
 }

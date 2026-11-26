@@ -33,6 +33,10 @@ pub struct ViewportCallback {
     pub overlay_key: u64,
     pub overlay_slot: SceneSlot,
     pub frame: Frame,
+    /// Where a viewport that cannot draw reports why (the app's status bar), and the context to
+    /// repaint so it is shown. The same channel as a device's uncaptured error.
+    pub errors: GpuErrors,
+    pub ctx: egui::Context,
 }
 
 /// An uploaded layer and the key it was uploaded for.
@@ -102,13 +106,33 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
     }
 
     fn paint(&self, info: egui::PaintCallbackInfo, pass: &mut wgpu::RenderPass<'static>, resources: &egui_wgpu::CallbackResources) {
-        let Some(res) = resources.get::<Resources>() else { return };
+        // A callback with no resources draws nothing and would leave the viewport blank with no
+        // explanation: report it where a device error goes, and repaint so the status bar shows it.
+        let Some(res) = resources.get::<Resources>() else {
+            self.report("the render resources are missing");
+            return;
+        };
         let vp = info.viewport_in_pixels();
         if vp.width_px <= 0 || vp.height_px <= 0 {
             return;
         }
         pass.set_viewport(vp.left_px as f32, vp.top_px as f32, vp.width_px as f32, vp.height_px as f32, 0.0, 1.0);
         res.pipelines.paint(pass, &res.scene.layer, &res.symbols.layer, &res.overlay.layer);
+    }
+}
+
+impl ViewportCallback {
+    /// Record a viewport failure in the app's GPU-error slot (shown in the status bar) unless one
+    /// is already waiting, and ask for the pass that shows it.
+    fn report(&self, why: &str) {
+        let text: String = format!("the 3D viewport did not draw: {why}").chars().take(MAX_ERROR_LEN).collect();
+        log::error!("{text}");
+        if let Ok(mut slot) = self.errors.lock()
+            && slot.is_none()
+        {
+            *slot = Some(text);
+        }
+        self.ctx.request_repaint();
     }
 }
 
@@ -157,6 +181,8 @@ mod tests {
             overlay_key: 1,
             overlay_slot: slot(&overlay),
             frame: Frame::of(&f.cam, w as f32, h as f32, f.scene.radius),
+            errors: Arc::new(Mutex::new(None)),
+            ctx: egui::Context::default(),
         };
         let mut encoder = device.create_command_encoder(&Default::default());
         let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [w, h], pixels_per_point: 1.0 };

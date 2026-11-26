@@ -36,6 +36,23 @@ pub const START_CREDITS: u32 = 2;
 /// larger than its 64 KiB limit. Past this, the whole frame goes as one (PNG).
 pub const MAX_RECTS: usize = 256;
 
+/// The reason a lost device's `bye` carries (the design's string).
+pub const DEVICE_LOST: &str = "device-lost";
+/// How long the device-loss notice lets the `bye` reach the host before the process exits.
+pub const DEVICE_LOST_GRACE: Duration = Duration::from_millis(250);
+
+/// Tell the host the device is gone and this session is over. `false` when the session's final
+/// `bye` was already spoken (a `stop` won the race).
+pub fn announce_device_lost(writer: &Writer, book: &StopBook) -> bool {
+    if !book.claim_end() {
+        return false;
+    }
+    if let Err(e) = writer.send(&json!({"t": "bye", "why": DEVICE_LOST}), &[]) {
+        log::warn!("bye {DEVICE_LOST}: {e}");
+    }
+    true
+}
+
 /// The GPU side of a pass: whatever turns egui primitives into RGBA pixels.
 pub trait Painter: Send {
     /// The render state the app's 3D viewport draws with, when there is one.
@@ -222,6 +239,10 @@ impl Host {
         let write = stream.try_clone().map_err(|e| format!("the socket: {e}"))?;
         let writer = Writer::new(write);
         let book = StopBook::default();
+        // A lost device cannot be recovered in this process. Watch for it on a thread of its own,
+        // holding a writer and the book, so the host hears `bye "device-lost"` even when the loop
+        // is stuck and never answers another pass.
+        self.watch_device_loss(&writer, &book);
         let (tx, rx) = mpsc::channel();
         {
             let tx = tx.clone();
@@ -237,6 +258,27 @@ impl Host {
         writer.shutdown();
         let _ = reader.join();
         result
+    }
+
+    /// Watch the render device for loss on a helper thread. wgpu reports it through its lost
+    /// callback (30.x has no `Device::lost()` future); this thread turns that into the wire's
+    /// `bye "device-lost"` and a `exit(1)`, independently of the loop that may be stuck.
+    fn watch_device_loss(&self, writer: &Writer, book: &StopBook) {
+        let Some(rs) = self.painter.render_state() else { return };
+        let device = rs.device.clone();
+        let (tx, rx) = mpsc::channel();
+        device.set_device_lost_callback(move |reason, message| {
+            log::error!("graphics device lost ({reason:?}): {message}");
+            let _ = tx.send(());
+        });
+        let (writer, book) = (writer.clone(), book.clone());
+        std::thread::spawn(move || {
+            if rx.recv().is_ok() && announce_device_lost(&writer, &book) {
+                // A short grace for the `bye` to reach the host before this process ends.
+                std::thread::sleep(DEVICE_LOST_GRACE);
+                std::process::exit(1);
+            }
+        });
     }
 
     fn run(&mut self, rx: &Receiver<Event>, writer: &Writer, book: &StopBook) -> Result<(), String> {
@@ -332,6 +374,8 @@ impl Host {
                 self.dirty();
             }
             HostMsg::Stop { why } => {
+                // One final `bye` per session: a device-loss notice afterwards stays silent.
+                book.claim_end();
                 writer.send(&json!({"t":"bye","why": why.unwrap_or_else(|| "stop".into())}), &[]).map_err(|e| e.to_string())?;
                 return Ok(false);
             }
@@ -790,6 +834,24 @@ mod tests {
         }
     }
 
+    /// A painter whose frame never finishes mapping back: the bounded wait must fail the pass
+    /// (and so end the process) instead of blocking the loop for ever.
+    struct StuckPainter {
+        tx: mpsc::Sender<Result<(), String>>,
+        rx: mpsc::Receiver<Result<(), String>>,
+    }
+
+    impl Painter for StuckPainter {
+        fn resize(&mut self, _w: u32, _h: u32) -> Result<(), String> {
+            Ok(())
+        }
+        fn paint(&mut self, _primitives: &[egui::ClippedPrimitive], _textures: egui::TexturesDelta, _ppp: f32) -> Result<Vec<u8>, String> {
+            // The sender is alive for the whole call, so this is a timeout, not a disconnect.
+            let _keep = &self.tx;
+            crate::readback::wait_for_map(&self.rx, crate::readback::WAIT_TIMEOUT, |_| Ok(wgpu::PollStatus::Poll)).map(|()| Vec::new())
+        }
+    }
+
     fn next(client: &mut TcpStream) -> (Value, Vec<u8>) {
         read_message(client).expect("a message from the server")
     }
@@ -1007,5 +1069,36 @@ mod tests {
         assert!(!token_matches(b"abc", b"abd"));
         assert!(!token_matches(b"abc", b"ab"));
         assert!(!token_matches(b"", b"x"));
+    }
+
+    #[test]
+    fn a_stuck_painter_fails_the_pass_within_the_wait() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (stream, _) = listener.accept().unwrap();
+        let writer = Writer::new(stream);
+        let (tx, rx) = mpsc::channel();
+        let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto };
+        let mut host = Host::new(Session::default(), cfg, Box::new(StuckPainter { tx, rx })).unwrap();
+        host.greeted = true;
+        let started = Instant::now();
+        let err = host.frame_once(&writer).unwrap_err();
+        assert!(err.contains(crate::readback::TIMEOUT), "{err}");
+        assert!(started.elapsed() <= Duration::from_secs(6), "the pass failed only after {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn a_lost_device_writes_bye_device_lost_once() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let (stream, _) = listener.accept().unwrap();
+        let writer = Writer::new(stream);
+        let book = StopBook::default();
+        assert!(announce_device_lost(&writer, &book));
+        let (bye, _) = read_message(&mut client).unwrap();
+        assert_eq!(bye["t"], "bye");
+        assert_eq!(bye["why"], "device-lost", "the design's exact reason string");
+        assert!(!announce_device_lost(&writer, &book), "one final bye per session");
     }
 }

@@ -168,12 +168,21 @@ impl Writer {
 #[derive(Clone, Default)]
 pub struct StopBook {
     answered: Arc<Mutex<std::collections::BTreeSet<u64>>>,
+    /// The session's final `bye` is spoken by exactly one thread (the loop's `stop`, or the
+    /// device-loss helper that ends a stuck session).
+    ended: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl StopBook {
     /// `true` for the first caller with `id`; that caller writes the reply.
     pub fn claim(&self, id: u64) -> bool {
         self.answered.lock().unwrap_or_else(|e| e.into_inner()).insert(id)
+    }
+
+    /// `true` for the first caller: it writes the session's final `bye`. A later `stop` or a
+    /// device-loss notice then stays silent.
+    pub fn claim_end(&self) -> bool {
+        !self.ended.swap(true, std::sync::atomic::Ordering::AcqRel)
     }
 }
 
@@ -275,5 +284,12 @@ mod tests {
         assert!(book.claim(1));
         assert!(!book.claim(1));
         assert!(book.claim(2));
+    }
+
+    #[test]
+    fn the_stop_book_speaks_one_final_bye() {
+        let book = StopBook::default();
+        assert!(book.claim_end());
+        assert!(!book.claim_end(), "a device-loss notice after a stop stays silent");
     }
 }
