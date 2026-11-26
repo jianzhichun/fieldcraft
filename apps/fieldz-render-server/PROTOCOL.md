@@ -78,6 +78,18 @@ exceed 8192 pixels a side or 4096×4096 pixels in all; the next frame is `full` 
 |---|---|---|
 | `visible` | bool | The pane is shown. While hidden the server runs passes (jobs must answer) but sends no frames; when shown again it sends `full`. |
 
+### `theme`
+
+| field | type | meaning |
+|---|---|---|
+| `dark` | bool | The host's window is dark (`true`) or light. |
+
+In the default `--theme auto` the server repaints the whole window in that theme: the next frame
+is `full`, and the app's clear colour, panels and widgets all move together. A server started
+with a fixed `--theme dark` or `--theme light` ignores this message (the flag wins); `ui.theme`
+(below) reports whichever theme is in effect. A host should send `theme` right after `hello` and
+again whenever its own light/dark switch moves.
+
 ### `ack`
 
 | field | type | meaning |
@@ -89,7 +101,7 @@ exceed 8192 pixels a side or 4096×4096 pixels in all; the next frame is `full` 
 | field | type | meaning |
 |---|---|---|
 | `id` | number | The caller's id; the reply carries it. |
-| `method` | string | a control method (`engine.execute`, `engine.script`, `engine.commands`, `job.status`, `job.wait`, `job.cancel`, `ui.*`, …), or `engine.batch` / `ui.operations` (this server's two). |
+| `method` | string | a control method (`engine.execute`, `engine.script`, `engine.commands`, `job.status`, `job.wait`, `job.cancel`, `ui.*`, …), or `engine.batch` / `ui.theme` / `ui.operations` (this server's own). |
 | `params` | object | the method's parameters, as `fieldcraft_ui_egui::control` defines them (or as below). |
 | `op` | string, optional | the turn/operation this call belongs to (`"turn/step"`); `ui.operations {cancel}` uses it. Default `"call/<id>"`. |
 
@@ -109,6 +121,9 @@ batch and the steps already done stay done (no rollback). The reply's `result` i
 
 A step that is a long command suspends the batch until its job answers. `results` holds each
 completed step's `result` value.
+
+**`ui.theme`** (new here): answers `{"ok":true,"result":{"dark":bool}}` with the theme in
+effect — a fixed `--theme`, or the one the last `theme` message set.
 
 **`ui.operations`** (new here): `{"op": name?, "cancel": name|"agent"}`.
 

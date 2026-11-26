@@ -48,23 +48,53 @@ pub trait Painter: Send {
     }
     /// The device-pixel size changed: recreate targets.
     fn resize(&mut self, width_px: u32, height_px: u32) -> Result<(), String>;
+    /// The theme switched: the next pass's clear colour follows it (a stub painter may ignore this).
+    fn set_dark(&mut self, _dark: bool) {}
     /// Draw one pass and read it back as tightly packed RGBA (`width_px × height_px`).
     fn paint(&mut self, primitives: &[egui::ClippedPrimitive], textures: egui::TexturesDelta, pixels_per_point: f32) -> Result<Vec<u8>, String>;
 }
 
-/// The view the host asked for: CSS points, pixels per point, cap.
+/// The window's theme: a fixed light or dark, or `auto`, which follows the page's `theme`
+/// messages (the host's own light/dark switch).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThemeMode {
+    Dark,
+    Light,
+    #[default]
+    Auto,
+}
+
+impl ThemeMode {
+    pub fn parse(s: &str) -> Result<ThemeMode, String> {
+        match s {
+            "dark" => Ok(ThemeMode::Dark),
+            "light" => Ok(ThemeMode::Light),
+            "auto" => Ok(ThemeMode::Auto),
+            other => Err(format!("`--theme` is dark, light or auto, not `{other}`")),
+        }
+    }
+
+    /// The theme the first pass uses: `auto` starts dark until the page says otherwise.
+    pub fn dark(self) -> bool {
+        self != ThemeMode::Light
+    }
+}
+
+/// The view the host asked for: CSS points, pixels per point, cap, and theme.
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub width: f32,
     pub height: f32,
     pub dpr: f32,
     pub fps_cap: f32,
+    /// The theme in effect; a `theme` message updates it in [`ThemeMode::Auto`].
     pub dark: bool,
+    pub theme: ThemeMode,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { width: 1280.0, height: 800.0, dpr: 1.0, fps_cap: 60.0, dark: true }
+        Config { width: 1280.0, height: 800.0, dpr: 1.0, fps_cap: 60.0, dark: true, theme: ThemeMode::Auto }
     }
 }
 
@@ -292,6 +322,7 @@ impl Host {
                     self.next_repaint = Some(Instant::now());
                 }
             }
+            HostMsg::Theme { dark } => self.theme(dark),
             HostMsg::Call { id, method, params, op } => {
                 self.call(writer, book, id, method, params, op);
                 self.dirty();
@@ -308,6 +339,7 @@ impl Host {
         let now = self.now_ms();
         let op = op.unwrap_or_else(|| format!("call/{id}"));
         match method.as_str() {
+            "ui.theme" => return self.reply(writer, id, json!({"ok": true, "result": {"dark": self.cfg.dark}})),
             "ui.operations" => return self.operations(writer, book, id, &params),
             "engine.batch" => {
                 return match Batch::new(op.clone(), &params) {
@@ -500,6 +532,19 @@ impl Host {
     fn frame_interval(&self) -> Duration {
         let cap = if self.cfg.fps_cap.is_finite() { self.cfg.fps_cap.clamp(1.0, 240.0) } else { 60.0 };
         Duration::from_secs_f64(1.0 / f64::from(cap))
+    }
+
+    /// A page's `theme` message: in `auto`, a change repaints the whole window in the new theme
+    /// (the clear colour and every widget move together). A fixed `--theme` ignores it.
+    fn theme(&mut self, dark: bool) {
+        if self.cfg.theme != ThemeMode::Auto || self.cfg.dark == dark {
+            return;
+        }
+        self.cfg.dark = dark;
+        fieldcraft_ui_egui::theme::apply(&self.ctx, dark);
+        self.painter.set_dark(dark);
+        self.need_full = true;
+        self.dirty();
     }
 
     fn dirty(&mut self) {
@@ -781,7 +826,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             let painter = StubPainter { w: 0, h: 0, frames: 0 };
-            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto };
             let host = Host::new(Session::default(), cfg, Box::new(painter)).unwrap();
             host.serve(stream, "secret".into())
         });
@@ -830,6 +875,88 @@ mod tests {
         write_message(&mut out, &json!({"t":"stop","why":"test"}), &[]).unwrap();
         let (bye, _) = read_type(&mut client, &mut out, "bye");
         assert_eq!(bye["why"], "test");
+        server.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn a_theme_message_repaints_the_window_full_and_ui_theme_reports_it() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let painter = StubPainter { w: 0, h: 0, frames: 0 };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto };
+            Host::new(Session::default(), cfg, Box::new(painter)).unwrap().serve(stream, "secret".into())
+        });
+
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        let mut out = client.try_clone().unwrap();
+        write_message(&mut out, &json!({"t":"hello","v":1,"token":"secret"}), &[]).unwrap();
+        let (ready, _) = read_type(&mut client, &mut out, "ready");
+        assert_eq!(ready["v"], 1);
+        let (first, _) = read_type(&mut client, &mut out, "frame");
+        assert_eq!(first["full"], true, "the first frame is full");
+        write_message(&mut out, &json!({"t":"ack","seq":first["seq"]}), &[]).unwrap();
+
+        // `ui.theme` speaks the applied theme (dark until the page says otherwise).
+        write_message(&mut out, &json!({"t":"call","id":3,"method":"ui.theme"}), &[]).unwrap();
+        let reply = read_reply(&mut client, &mut out, 3);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(reply["result"]["dark"], true);
+
+        // A page theme change asks for the whole window again (the clear colour moved with it). An earlier
+        // dirty frame (the `ui.theme` call itself marks one) may still be in flight first: read on to the full one.
+        write_message(&mut out, &json!({"t":"theme","dark":false}), &[]).unwrap();
+        let mut themed = None;
+        for _ in 0..50 {
+            let (header, _) = next(&mut client);
+            if header.get("t").and_then(Value::as_str) == Some("frame") {
+                if let Some(seq) = header.get("seq") {
+                    let _ = write_message(&mut out, &json!({"t":"ack","seq":seq}), &[]);
+                }
+                if header["full"].as_bool() == Some(true) {
+                    themed = Some(header);
+                    break;
+                }
+            }
+        }
+        let next = themed.expect("a full frame after a theme change");
+        assert!(next["seq"].as_u64().unwrap() > first["seq"].as_u64().unwrap());
+
+        write_message(&mut out, &json!({"t":"call","id":4,"method":"ui.theme"}), &[]).unwrap();
+        let reply = read_reply(&mut client, &mut out, 4);
+        assert_eq!(reply["result"]["dark"], false, "ui.theme follows the change");
+
+        write_message(&mut out, &json!({"t":"stop","why":"test"}), &[]).unwrap();
+        let (bye, _) = read_type(&mut client, &mut out, "bye");
+        assert_eq!(bye["why"], "test");
+        server.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn a_fixed_theme_ignores_the_page() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let painter = StubPainter { w: 0, h: 0, frames: 0 };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Dark };
+            Host::new(Session::default(), cfg, Box::new(painter)).unwrap().serve(stream, "secret".into())
+        });
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        let mut out = client.try_clone().unwrap();
+        write_message(&mut out, &json!({"t":"hello","v":1,"token":"secret"}), &[]).unwrap();
+        let _ = read_type(&mut client, &mut out, "ready");
+        let (first, _) = read_type(&mut client, &mut out, "frame");
+        write_message(&mut out, &json!({"t":"ack","seq":first["seq"]}), &[]).unwrap();
+        write_message(&mut out, &json!({"t":"theme","dark":false}), &[]).unwrap();
+        write_message(&mut out, &json!({"t":"call","id":5,"method":"ui.theme"}), &[]).unwrap();
+        let reply = read_reply(&mut client, &mut out, 5);
+        assert_eq!(reply["result"]["dark"], true, "a fixed --theme dark stays dark");
+        write_message(&mut out, &json!({"t":"stop","why":"test"}), &[]).unwrap();
+        let _ = read_type(&mut client, &mut out, "bye");
         server.join().unwrap().unwrap();
     }
 

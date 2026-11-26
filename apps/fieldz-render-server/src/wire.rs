@@ -56,6 +56,11 @@ pub enum HostMsg {
     Ack {
         seq: u64,
     },
+    /// The host's window switched between its light and dark themes: draw the whole window
+    /// again in `dark`. Ignored when the server was started with a fixed `--theme`.
+    Theme {
+        dark: bool,
+    },
     /// A request answered by `control::handle` (or the server's own methods); `op` names the
     /// operation the turn belongs to (`turn/step`), for cancellation.
     Call {

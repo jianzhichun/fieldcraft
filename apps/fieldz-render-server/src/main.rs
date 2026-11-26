@@ -22,7 +22,7 @@ use fieldcraft_engine::Session;
 use fieldcraft_gpu::select;
 use serde_json::json;
 
-use crate::host::{Config, Host};
+use crate::host::{Config, Host, ThemeMode};
 
 const USAGE: &str = "\
 fieldz-render-server — a windowless FieldCraft window, streamed over loopback TCP.
@@ -41,6 +41,9 @@ Flags:
   --dpr <N>              Pixels per point (default 1; clamped to 0.5..=4.0, and lowered further
                          when the frame would exceed 8192 pixels a side or 4096×4096 in all; the
                          frame header says what was used as `dprUsed`).
+  --theme <MODE>         dark, light or auto (default auto). `auto` follows the page's `theme`
+                         messages (the host's own light/dark switch); dark/light are fixed and
+                         ignore them.
   --read-only <REASON>   Open the session read-only: saving, undo/redo, opening or replacing the
                          document, deck import/export and the export/image writers are refused
                          with `EngineError::Disabled`, and a model edit is undone (and, where a
@@ -68,6 +71,7 @@ struct Args {
     read_only: Option<String>,
     open: Option<String>,
     fps_cap: f32,
+    theme: ThemeMode,
 }
 
 impl Args {
@@ -94,6 +98,7 @@ impl Args {
                 "--read-only" => args.read_only = Some(value()?),
                 "--open" => args.open = Some(value()?),
                 "--fps-cap" => args.fps_cap = value()?.parse().map_err(|_| "`--fps-cap` must be a number".to_string())?,
+                "--theme" => args.theme = ThemeMode::parse(&value()?)?,
                 other => return Err(format!("unknown flag `{other}` (try --help)")),
             }
         }
@@ -166,10 +171,11 @@ fn run() -> Result<(), String> {
     // first frame only runs once it arrives.
     let policy = select::Policy::from_env().map_err(|e| e.to_string())?;
     let (width, height, dpr_used) = host::fit(args.width, args.height, args.dpr)?;
-    let gpu = gpu::Gpu::new(policy, width, height, true)?;
+    let dark = args.theme.dark();
+    let gpu = gpu::Gpu::new(policy, width, height, dark)?;
     let (stream, peer) = listener.accept().map_err(|e| format!("accepting a connection: {e}"))?;
     log::info!("serving {} (dpr {dpr_used})", peer);
-    let config = Config { width: args.width, height: args.height, dpr: args.dpr, fps_cap: args.fps_cap, dark: true };
+    let config = Config { width: args.width, height: args.height, dpr: args.dpr, fps_cap: args.fps_cap, dark, theme: args.theme };
     let mut host = Host::new(Session::default(), config, Box::new(gpu))?;
     if let Some(path) = &args.open {
         host.open(path)?;

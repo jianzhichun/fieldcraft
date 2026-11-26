@@ -122,6 +122,10 @@ impl Painter for Gpu {
         Ok(())
     }
 
+    fn set_dark(&mut self, dark: bool) {
+        self.dark = dark;
+    }
+
     fn paint(&mut self, primitives: &[egui::ClippedPrimitive], textures: egui::TexturesDelta, pixels_per_point: f32) -> Result<Vec<u8>, String> {
         let (device, queue) = (&self.rs.device, &self.rs.queue);
         let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [self.width, self.height], pixels_per_point };
