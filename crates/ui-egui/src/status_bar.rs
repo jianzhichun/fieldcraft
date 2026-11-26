@@ -26,9 +26,9 @@ pub fn shown(app: &ModelApp) -> bool {
 pub fn items(app: &ModelApp) -> [String; 3] {
     let (nodes, elements) = (app.session.model.nodes().len(), app.session.model.elements().len());
     [
-        app.gpu_info.clone().unwrap_or_else(|| "CPU renderer".into()),
-        (if app.ui.perspective { "Perspective" } else { "Orthographic" }).into(),
-        format!("{nodes} nodes  {elements} elements"),
+        app.gpu_info.clone().unwrap_or_else(|| crate::words::owned("CPU renderer")),
+        crate::words::owned(if app.ui.perspective { "Perspective" } else { "Orthographic" }),
+        crate::words::wfmt!("{nodes} nodes  {elements} elements"),
     ]
 }
 
@@ -100,5 +100,7 @@ mod tests {
         assert!((bar.bottom() - 900.0).abs() < 0.5 && (bar.height() - HEIGHT).abs() < 0.5 && bar.width() > 1399.0, "{bar:?}");
         assert!(history.bottom() < bar.top(), "{history:?} {bar:?}");
         assert_eq!(items(&app), ["CPU renderer".to_string(), "Orthographic".into(), "0 nodes  0 elements".into()]);
+        let _scope = solidcraft_ui_text::scope("zh");
+        assert_eq!(items(&app)[2], "0 个节点  0 个单元");
     }
 }

@@ -93,8 +93,8 @@ pub fn summary_in(command: &str, v: &Value, units: Option<&DisplaySystem>) -> St
             let elements: u64 = v["elements"].as_object().into_iter().flatten().filter_map(|(_, n)| n.as_u64()).sum();
             crate::words::wfmt!(
                 "{}, {}, units {}",
-                plural(v["nodes"].as_u64().unwrap_or(0), "node"),
-                plural(elements, "element"),
+                crate::words::counted(v["nodes"].as_u64().unwrap_or(0), "node", "nodes"),
+                crate::words::counted(elements, "element", "elements"),
                 v["display_units"].as_str().unwrap_or("—")
             )
         }
@@ -143,13 +143,21 @@ pub fn sentence(command: &str, v: &Value) -> Option<String> {
 pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
     let view = v.get("view").filter(|x| x.is_object());
     let step = view.and_then(|x| x["step"].as_str()).unwrap_or(crate::words::ts("the step"));
+    let contour_label = || {
+        let label = v.pointer("/contour/label")?.as_str()?;
+        let field = v.pointer("/contour/field").and_then(Value::as_str).and_then(fieldcraft_engine::results::Field::parse);
+        Some(match field {
+            Some(f) if f.label() == label => crate::results::field_label(f),
+            _ => label,
+        })
+    };
     let line = match command {
         "results.deformed" if view.is_some_and(|x| x["deformed"] == false) => Some(crate::words::wfmt!("Showing {step} undeformed")),
         "results.deformed" => {
             let scale = view.and_then(|x| x["scale"].as_f64()).map(|f| format!(" ×{}", crate::describe::quantity(f))).unwrap_or_default();
             Some(crate::words::wfmt!("Showing {step} deformed{scale}"))
         }
-        "results.contour" => Some(match v.pointer("/contour/label").and_then(Value::as_str) {
+        "results.contour" => Some(match contour_label() {
             Some(field) => crate::words::wfmt!("Showing {field} on {step}"),
             None => crate::words::wfmt!("Contours off on {step}"),
         }),
@@ -175,7 +183,7 @@ pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
         }),
         "results.slice" => Some(match (v["slice"]["axis"].as_str(), v["slice"]["position"].as_f64()) {
             (Some(axis), Some(at)) => {
-                let field = v.pointer("/contour/label").and_then(Value::as_str).unwrap_or(crate::words::ts("The flow"));
+                let field = contour_label().unwrap_or(crate::words::ts("The flow"));
                 crate::words::wfmt!("{field} on a slice at {axis} = {}", crate::describe::quantity(at))
             }
             _ => crate::words::wfmt!("Slice off on {step}"),
@@ -196,7 +204,9 @@ pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
         "results.xy" => {
             let points = v.get("points").and_then(Value::as_u64).unwrap_or(0);
             let what = v.pointer("/y/label").and_then(Value::as_str).unwrap_or(crate::words::ts("the series"));
-            Some(crate::words::wfmt!("Plotted {what}: {}", plural(points, "point")))
+            let field = crate::results::xy_field_text(&params["y"], what);
+            let what = field.as_deref().unwrap_or(what);
+            Some(crate::words::wfmt!("Plotted {what}: {}", crate::words::counted(points, "point", "points")))
         }
         "file.sample" => {
             let label = v.get("sample").and_then(Value::as_str).and_then(fieldcraft_engine::sample::find).map(|s| s.label);

@@ -115,10 +115,13 @@ impl Item {
     /// The item in words: `face F2:top of body Body1`, `node 5`, `element 3 face 2`.
     pub fn describe(&self) -> String {
         match self {
-            Item::Geometry(g) => g.to_string(),
-            Item::Node(n) => format!("node {n}"),
-            Item::Element(e) => format!("element {e}"),
-            Item::Face(f) => format!("element {} face {}", f.element, f.face),
+            Item::Geometry(g) => match g.entity.name() {
+                Some(name) => format!("{} {name}{}{}", crate::words::ts(g.entity.kind()), crate::words::ts(" of body "), g.body),
+                None => crate::words::wfmt!("body {}", g.body),
+            },
+            Item::Node(n) => crate::words::wfmt!("node {n}"),
+            Item::Element(e) => crate::words::wfmt!("element {e}"),
+            Item::Face(f) => crate::words::wfmt!("element {} face {}", f.element, f.face),
         }
     }
 
@@ -232,26 +235,35 @@ impl Selection {
 
     /// What is selected in a few words: `2 faces, 15 nodes`.
     pub fn summary(&self) -> String {
-        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        self.summary_with(false)
+    }
+
+    pub(crate) fn display_summary(&self) -> String {
+        self.summary_with(true)
+    }
+
+    fn summary_with(&self, display: bool) -> String {
+        let mut counts = BTreeMap::new();
         for item in &self.items {
-            let kind = match item {
-                Item::Geometry(g) => g.entity.kind(),
-                Item::Node(_) => "node",
-                Item::Element(_) => "element",
-                Item::Face(_) => "element face",
+            let nouns = match Filter::of(item) {
+                Filter::Bodies => ("body", "bodies"),
+                Filter::Edges => ("edge", "edges"),
+                Filter::Faces => ("face", "faces"),
+                Filter::Vertices => ("vertex", "vertices"),
+                Filter::Nodes => ("node", "nodes"),
+                Filter::Elements => ("element", "elements"),
+                Filter::ElementFaces => ("element face", "element faces"),
             };
-            *counts.entry(kind).or_default() += 1;
+            *counts.entry(nouns).or_insert(0_u64) += 1;
         }
         if counts.is_empty() {
-            return "nothing selected".into();
+            return if display { crate::words::owned("nothing selected") } else { "nothing selected".into() };
         }
-        let plural = |kind: &str, n: usize| match (kind, n) {
-            (k, 1) => k.to_string(),
-            ("body", _) => "bodies".into(),
-            ("vertex", _) => "vertices".into(),
-            (k, _) => format!("{k}s"),
-        };
-        counts.iter().map(|(k, n)| format!("{n} {}", plural(k, *n))).collect::<Vec<_>>().join(", ")
+        counts
+            .into_iter()
+            .map(|((one, many), n)| if display { crate::words::counted(n, one, many) } else { format!("{n} {}", if n == 1 { one } else { many }) })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
@@ -1364,6 +1376,22 @@ mod tests {
         assert_eq!(extrude_key(&json!({"source_set": "Section"})), "to_surface");
         s.apply([Item::Node(4)], Mode::Replace);
         assert!(with_extrude_faces(&form, &s).is_none(), "no face selected");
+    }
+
+    #[test]
+    fn localised_selection_keeps_its_protocol_summary_and_user_names() {
+        crate::theme::install_look();
+        let _scope = solidcraft_ui_text::scope("zh");
+        let mut s = Selection::default();
+        let face = Item::Geometry(GeometryRef::face("Faces", "unsaved").unwrap());
+        assert_eq!(face.describe(), "面 unsaved，所属实体：Faces");
+        s.apply([face, Item::Node(2), Item::Node(3)], Mode::Replace);
+        assert_eq!(s.display_summary(), "1 个面, 2 个节点");
+        assert_eq!(s.summary(), "1 face, 2 nodes");
+        assert_eq!(s.params()["geometry"][0], json!({"body":"Faces", "face":"unsaved"}));
+        for filter in Filter::ALL {
+            assert_ne!(crate::words::ts(filter.label()), filter.label());
+        }
     }
 
     #[test]

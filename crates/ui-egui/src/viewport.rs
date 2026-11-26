@@ -383,7 +383,7 @@ fn context_menu(app: &mut ModelApp, response: &egui::Response) {
         }
         kit::Menu::separator(ui);
         for f in Filter::ALL {
-            let label = crate::words::wfmt!("Select {}", f.label().to_lowercase());
+            let label = crate::words::wfmt!("Select {}", crate::words::ts(f.label()).to_lowercase());
             let mut row = kit::MenuItem::new(f.label(), &label, "");
             row.checked = Some(app.pick.filter == f);
             if row.show(ui).clicked() {
@@ -423,13 +423,13 @@ fn selection_bar(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 let label = kit::text(ui, crate::words::ts("Select"), kit::Text::Inline).rect;
                 app.place("selection_bar:label", label);
-                let filter = kit::bounded_dropdown_menu(ui, "fc_selection_filter", app.pick.filter.label(), 110.0, |ui| {
+                let filter = kit::bounded_dropdown_menu(ui, "fc_selection_filter", crate::words::ts(app.pick.filter.label()), 110.0, |ui| {
                     for (i, f) in Filter::ALL.into_iter().enumerate() {
                         // Geometry, then the mesh.
                         if i > 0 && Filter::ALL.get(i - 1).is_some_and(|p| p.geometry() != f.geometry()) {
                             crate::frame::menu_separator(ui);
                         }
-                        let mut row = kit::MenuItem::new(f.label(), f.label(), "");
+                        let mut row = kit::MenuItem::new(f.label(), crate::words::ts(f.label()), "");
                         row.checked = Some(app.pick.filter == f);
                         if row.show(ui).clicked() {
                             app.pick.filter = f;
@@ -447,7 +447,7 @@ fn selection_bar(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
                     app.pick.box_mode = !app.pick.box_mode;
                 }
                 if !app.pick.selection.is_empty() {
-                    let mut text = app.pick.selection.summary();
+                    let mut text = app.pick.selection.display_summary();
                     if app.pick.selection.capped() {
                         text.push_str(crate::words::ts(" (capped)"));
                     }

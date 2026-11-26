@@ -130,13 +130,23 @@ impl ModelApp {
     /// a script or agent's request, opens nothing: the status names the link instead.
     pub(crate) fn open_link(&mut self, ctx: &egui::Context, url: &str) {
         if self.driven || self.session.origin.is_some_and(Origin::automated) {
-            self.set_status(format!("{url} opens in the browser only from a click in the window"), false);
+            let text = if solidcraft_ui_text::language() == "zh" {
+                format!("请在窗口中手动点击链接以在浏览器中打开：{url}")
+            } else {
+                format!("{url} opens in the browser only from a click in the window")
+            };
+            self.set_status(text, false);
             return;
         }
         match &self.services.open_url {
             Some(open) => {
                 if let Err(e) = open(url) {
-                    self.set_status(format!("Could not open the browser: {e}"), true);
+                    let text = if solidcraft_ui_text::language() == "zh" {
+                        format!("无法打开浏览器：{e}")
+                    } else {
+                        format!("Could not open the browser: {e}")
+                    };
+                    self.set_status(text, true);
                 }
             }
             None => ctx.open_url(egui::OpenUrl::new_tab(url)),

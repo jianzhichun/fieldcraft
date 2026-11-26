@@ -237,7 +237,7 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
             editor.field = available.first().copied().unwrap_or(Field::Displacement);
         }
         let mut field = available.iter().position(|f| *f == editor.field).unwrap_or(0);
-        let labels: Vec<&str> = available.iter().map(|f| f.label()).collect();
+        let labels: Vec<&str> = available.iter().map(|f| crate::results::field_label(*f)).collect();
         kit::choice_row(ui, crate::words::ts("Field"), "fc_path_field", &mut field, &labels);
         if let Some(f) = available.get(field) {
             editor.field = *f;
@@ -322,7 +322,9 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
         let frame = plot.pick.frame.map_or_else(|| crate::words::ts("final state").to_string(), |k| crate::words::wfmt!("frame {k}"));
         let mode = plot.mode.map(|mode| crate::words::wfmt!("mode {mode}"));
         let result = plot.result.upgrade();
-        let title = result.as_ref().map_or_else(|| plot.field.label().to_owned(), |r| plot.field.title(r, app.session.units()));
+        let title = result
+            .as_ref()
+            .map_or_else(|| crate::results::field_label(plot.field).to_owned(), |r| crate::results::field_title(plot.field, r, app.session.units()));
         kit::text(ui, &format!("{} · {}", plot.step, mode.as_deref().unwrap_or(&frame)), kit::Text::Heading("fc_path_plot_step"));
         kit::status_line(ui, &title, kit::StatusTone::Dim);
         if !plot.current(&app.session) {

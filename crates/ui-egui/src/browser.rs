@@ -1161,13 +1161,13 @@ fn resize(app: &mut ModelApp, ui: &egui::Ui, id: egui::Id, card: Rect, width: f3
 /// places. The design's bodies and imported surfaces when the model has geometry, else the mesh's
 /// elements (a deck or a mesh read on its own); nothing for an empty model.
 fn header_count(app: &ModelApp) -> String {
-    use crate::feature_graph::plural;
+    use crate::words::counted;
     let bodies = app.session.design.as_ref().map_or(0, |d| d.bodies.len()) + app.session.surfaces.len();
     let elements = app.session.model.elements().len();
     if bodies > 0 {
-        plural(bodies, "body", "bodies")
+        counted(bodies as u64, "body", "bodies")
     } else if elements > 0 {
-        plural(elements, "element", "elements")
+        counted(elements as u64, "element", "elements")
     } else {
         String::new()
     }
@@ -1286,7 +1286,7 @@ fn mesh_items(m: &Model) -> Vec<Item> {
                 SizeRegion::Box { .. } => "box",
                 SizeRegion::Sphere { .. } => "sphere",
             };
-            Item::def(m, Def::SizeControl, n, Some(on.into()))
+            Item::def(m, Def::SizeControl, n, Some(crate::words::owned(on)))
         })
         .collect();
     out.extend(m.mesh_plans().iter().map(|(n, p)| Item::def(m, Def::MeshPlan, n, Some(crate::words::wfmt!("for {}", p.body)))));
@@ -1378,7 +1378,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
         app,
         ui,
         egui::Id::unique("fc_row_root"),
-        &Row { icon: Some("ui.views"), label: &name, note: dirty.then(|| "unsaved".into()), ..Default::default() },
+        &Row { icon: Some("ui.views"), label: &name, name: true, note: dirty.then(|| crate::words::owned("unsaved")), ..Default::default() },
     );
     // Geometry.
     if shown(app, &stages, "geometry") {
@@ -1419,6 +1419,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                         depth: 2,
                         icon: Some("geometry.open"),
                         label: &label,
+                        name: true,
                         note: Some(crate::words::wfmt!("{bodies} bodies")),
                         ..Default::default()
                     },
@@ -1614,7 +1615,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                     app,
                     ui,
                     egui::Id::unique(("fc_row_result", &step)),
-                    &Row { depth: 2, icon: Some("results.deformed"), label: &label, selected, dim: !current, ..Default::default() },
+                    &Row { depth: 2, icon: Some("results.deformed"), label: &label, name: true, selected, dim: !current, ..Default::default() },
                 );
                 if r.clicked {
                     acts.push(Act::ShowResult(step));
@@ -2129,6 +2130,33 @@ pub(crate) mod tests {
         assert!(!drag(&mut app, card.center()), "a drag on the browser card leaves the view");
     }
 
+    #[test]
+    fn localized_display_draws_names_verbatim_beside_translated_status() {
+        let mut app = ModelApp::new(Session::default());
+        app.run_script(&fieldcraft_engine::sample::cantilever()).unwrap();
+        app.run("solve.static", json!({"step": "Load"})).unwrap();
+        app.session.path = Some("Faces.fieldz".into());
+        assert!(app.session.is_dirty());
+        app.tree_open.clear();
+        app.tree_open.insert("results".into());
+        let _lang = solidcraft_ui_text::scope("zh");
+        let ctx = egui::Context::default();
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 1200.0))), ..Default::default() };
+        let painted = ctx.run_ui(input, |ui| rows(&mut app, ui, &mut Vec::new()));
+        fn collect(shape: &egui::Shape, out: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_owned()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut labels = Vec::new();
+        painted.shapes.iter().for_each(|c| collect(&c.shape, &mut labels));
+        for want in ["Faces", "Load", "未保存"] {
+            assert!(labels.iter().any(|s| s == want), "missing {want}: {labels:?}");
+        }
+    }
+
     /// The header counts the bodies of a model with geometry, else its elements.
     #[test]
     fn the_header_counts_bodies_else_elements() {
@@ -2136,6 +2164,8 @@ pub(crate) mod tests {
         assert_eq!(header_count(&app), "");
         app.run_script(&fieldcraft_engine::sample::cantilever()).unwrap();
         assert_eq!(header_count(&app), "160 elements");
+        let _scope = solidcraft_ui_text::scope("zh");
+        assert_eq!(header_count(&app), "160 个单元");
     }
 
     /// A sample opened in the window is framed in the view the cards leave free.

@@ -318,7 +318,7 @@ fn refused(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens) {
 /// A command that applies to part of the model (a set, a boundary condition, a load, a section, a
 /// coupling) has a Target row that takes the viewport's selection. Returns where it was drawn.
 fn form(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, bounds: Rect, anchor: egui::Pos2) -> Option<Rect> {
-    let selected = (!app.pick.selection.is_empty()).then(|| app.pick.selection.summary());
+    let selected = (!app.pick.selection.is_empty()).then(|| app.pick.selection.display_summary());
     let running = app.busy().map(str::to_string);
     let relax_note = app.relax_note().or_else(|| app.node_move_note());
     let fluid_note = app.fluid_note();

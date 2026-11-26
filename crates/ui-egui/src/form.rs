@@ -409,11 +409,11 @@ impl Form<'_> {
                 let selected = options
                     .iter()
                     .find(|(v, _)| Some(*v) == current)
-                    .map_or(current.unwrap_or(if f.hint.is_empty() { "—" } else { f.hint }), |(_, l)| *l);
-                let mut labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
+                    .map_or(current.unwrap_or(if f.hint.is_empty() { "—" } else { f.hint }), |(_, l)| crate::words::ts(l));
+                let mut labels: Vec<&str> = options.iter().map(|(_, l)| crate::words::ts(l)).collect();
                 let optional = !f.required;
                 if optional {
-                    labels.push("(default)");
+                    labels.push(crate::words::ts("(default)"));
                 }
                 fields::combo(ui, id, selected, &labels, fill(ui, &s)).map(|i| options.get(i).map_or(Value::Null, |(v, _)| json!(v)))
             }
@@ -617,7 +617,7 @@ impl Form<'_> {
         let selected = current.clone().unwrap_or_else(|| empty.to_string());
         let mut labels: Vec<&str> = names.iter().map(String::as_str).collect();
         if !required {
-            labels.push("(default)");
+            labels.push(crate::words::ts("(default)"));
         }
         fields::combo(ui, id, &selected, &labels, fill(ui, &self.style)).map(|i| names.get(i).map_or(Value::Null, |n| json!(n)))
     }
@@ -673,7 +673,7 @@ impl Form<'_> {
         let current = value.and_then(Value::as_object).cloned().unwrap_or_default();
         let names = self.names(c).to_vec();
         let mut labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
-        labels.push("(default)");
+        labels.push(crate::words::ts("(default)"));
         let mut changed = None;
         ui.vertical(|ui| {
             if names.is_empty() {
@@ -681,7 +681,7 @@ impl Form<'_> {
             }
             for (i, n) in names.iter().take(MAX_ROWS).enumerate() {
                 let chosen = current.get(n).and_then(Value::as_str);
-                let selected = options.iter().find(|(v, _)| Some(*v) == chosen).map_or("(default)", |(_, l)| *l);
+                let selected = options.iter().find(|(v, _)| Some(*v) == chosen).map_or(crate::words::ts("(default)"), |(_, l)| *l);
                 let row = ui.horizontal(|ui| {
                     let width = (ui.available_width() * 0.5).max(FIELD_MIN);
                     ui.add_sized([width, ui.spacing().interact_size.y], egui::Label::new(n.as_str()).truncate());
@@ -1060,7 +1060,9 @@ impl Form<'_> {
         match choices.get(mode).copied() {
             Some(SELECTION) => {
                 let n = picked.len();
-                let note = crate::words::wfmt!("{n} {}{} picked in the view (Select: {}s)", of.label(), if n == 1 { "" } else { "s" }, of.label());
+                let (one, many) = label_nouns(of);
+                let note =
+                    crate::words::wfmt!("{} picked in the view (Select: {})", crate::words::counted(n as u64, one, many), crate::words::ts(many));
                 fields::note(ui, &Style { label_width: 0.0, ..self.style }, &note, self.style.dim);
                 (picked != current).then(|| as_value(&picked))
             }
@@ -1086,8 +1088,9 @@ impl Form<'_> {
             {
                 out = Some(if l.is_empty() { Value::Null } else { json!(l) });
             }
-            let label = crate::words::wfmt!("Use selection ({} {}{})", picked.len(), of.label(), if picked.len() == 1 { "" } else { "s" });
-            let tip = crate::words::wfmt!("The {}s picked in the viewport (Select: {}s)", of.label(), of.label());
+            let (one, many) = label_nouns(of);
+            let label = crate::words::wfmt!("Use selection ({})", crate::words::counted(picked.len() as u64, one, many));
+            let tip = crate::words::wfmt!("The {kind} picked in the viewport (Select: {kind})", kind = crate::words::ts(many));
             if kit::button(ui, label, kit::Button::Enabled(!picked.is_empty()))
                 .backing_on_hover_text(&tip)
                 .backing_on_disabled_hover_text(&tip)
@@ -1132,7 +1135,7 @@ impl Form<'_> {
             }
             if side == schema::Side::Face {
                 let picked = self.cx.picked.faces.clone();
-                let label = crate::words::wfmt!("Use selection ({} face{})", picked.len(), if picked.len() == 1 { "" } else { "s" });
+                let label = crate::words::wfmt!("Use selection ({})", crate::words::counted(picked.len() as u64, "face", "faces"));
                 let tip = crate::words::ts("The element faces picked in the viewport (Select: Element faces)");
                 if kit::button(ui, label, kit::Button::Enabled(!picked.is_empty()))
                     .backing_on_hover_text(tip)
@@ -1490,6 +1493,16 @@ fn preselect_in(fields: &[Field], obj: &mut Map<String, Value>, pick: &dyn Fn(Co
         }
     }
     changed
+}
+
+fn label_nouns(of: schema::LabelOf) -> (&'static str, &'static str) {
+    (
+        of.label(),
+        match of {
+            schema::LabelOf::Node => "nodes",
+            schema::LabelOf::Element => "elements",
+        },
+    )
 }
 
 #[cfg(test)]

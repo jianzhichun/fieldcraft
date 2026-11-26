@@ -68,6 +68,7 @@ pub mod toolbar;
 pub mod updates;
 pub mod viewport;
 pub mod words;
+mod xy_text;
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -1164,7 +1165,8 @@ impl ModelApp {
     fn read_probe(&mut self, reply: &Value, node: u32, step: String, pick: fieldcraft_engine::results::Pick) -> Probe {
         let plot = self.plot();
         let rows = probe_rows(reply, plot.as_deref(), self.session.units(), node, pick.mode);
-        let lines: Vec<String> = std::iter::once(format!("Node {node}")).chain(rows.iter().map(|(what, value)| format!("{what} {value}"))).collect();
+        let lines: Vec<String> =
+            std::iter::once(crate::words::wfmt!("Node {node}")).chain(rows.iter().map(|(what, value)| format!("{what} {value}"))).collect();
         Probe { node, step, mode: pick.mode, frame: pick.frame, rows, lines }
     }
 
@@ -1774,9 +1776,9 @@ impl ModelApp {
         if let Some(f) = self.pick.selection.filter() {
             self.pick.filter = f;
         }
-        let mut text = format!("Selected: {}", self.pick.selection.summary());
+        let mut text = crate::words::wfmt!("Selected: {}", self.pick.selection.display_summary());
         if self.pick.selection.capped() {
-            text.push_str(&format!(" (at most {} items)", selection::MAX_SELECTION));
+            text.push_str(&crate::words::wfmt!(" (at most {} items)", selection::MAX_SELECTION));
         }
         self.set_status(text, false);
     }
@@ -1785,7 +1787,7 @@ impl ModelApp {
         if !self.pick.selection.is_empty() {
             self.pick.selection.clear();
             self.pick.generation = self.pick.generation.wrapping_add(1);
-            self.set_status("Selection cleared", false);
+            self.set_status(crate::words::ts("Selection cleared"), false);
         }
     }
 
@@ -2764,8 +2766,12 @@ fn probe_rows(reply: &Value, plot: Option<&results::Plot>, units: &DisplaySystem
     // Commands return solved data, independently of display interpolation. Keep that
     // distinction beside the numbers, including when an earlier nonlinear shape is drawn.
     match plot.map(|p| p.result.kind()) {
-        Some(fieldcraft_engine::results::Kind::Static(_)) => rows.push(("Probe values".into(), "Solved final state".into())),
-        Some(fieldcraft_engine::results::Kind::Frequency(_)) => rows.push(("Probe values".into(), "Unscaled mode shape".into())),
+        Some(fieldcraft_engine::results::Kind::Static(_)) => {
+            rows.push((crate::words::owned("Probe values"), crate::words::owned("Solved final state")))
+        }
+        Some(fieldcraft_engine::results::Kind::Frequency(_)) => {
+            rows.push((crate::words::owned("Probe values"), crate::words::owned("Unscaled mode shape")))
+        }
         _ => {}
     }
     let vector_row = |rows: &mut Vec<(String, String)>, name: &str, v: [f64; 3], q: Quantity, scale: f64| {
@@ -2783,14 +2789,14 @@ fn probe_rows(reply: &Value, plot: Option<&results::Plot>, units: &DisplaySystem
     let mises = at.get("von_mises").and_then(Value::as_f64);
     let stress_unit = unit(Quantity::Pressure);
     if let Some(m) = mises {
-        rows.push(("Mises".into(), results::with_unit(results::number(m), stress_unit.as_deref())));
+        rows.push((crate::words::owned("Mises"), results::with_unit(results::number(m), stress_unit.as_deref())));
     }
     if let Some(t) = stress {
         let scale = mises.unwrap_or(0.0);
         rows.push((titled("S xx, yy, zz", stress_unit.as_deref()), results::components(&t[..3], scale)));
         rows.push((titled("S xy, xz, yz", stress_unit.as_deref()), results::components(&t[3..], scale)));
         let p = fieldcraft_engine::results::principal(&t);
-        rows.push((titled("Principal", stress_unit.as_deref()), results::components(&p, scale)));
+        rows.push((titled(crate::words::ts("Principal"), stress_unit.as_deref()), results::components(&p, scale)));
     }
     if let Some(t) = at.get("temperature").and_then(Value::as_f64) {
         rows.push(("T".into(), results::with_unit(results::number(t), unit(Quantity::Temperature).as_deref())));
@@ -2802,13 +2808,17 @@ fn probe_rows(reply: &Value, plot: Option<&results::Plot>, units: &DisplaySystem
         vector_row(&mut rows, "V", v, Quantity::Velocity, 0.0);
     }
     if let Some(shape) = vector("shape") {
-        rows.push((format!("Mode {mode} shape (normalised)"), results::components(&shape, largest)));
+        rows.push((crate::words::wfmt!("Mode {mode} shape (normalised)"), results::components(&shape, largest)));
     }
     let contour = plot.and_then(|p| p.contour.as_ref().map(|c| (c.field, c.at(p.result.nodes(), node), &p.result)));
     if let Some((field, v, result)) =
         contour.filter(|(f, ..)| !matches!(f, Field::VonMises | Field::Temperature) && !f.label().starts_with("Displacement"))
     {
-        let label = if plot.is_some_and(|p| p.amplitude.is_some()) { format!("Displayed {}", field.label()) } else { field.label().to_string() };
+        let label = if plot.is_some_and(|p| p.amplitude.is_some()) {
+            crate::words::wfmt!("Displayed {}", results::field_label(field))
+        } else {
+            results::field_label(field).to_string()
+        };
         rows.push((label, results::with_unit(results::number(v), field.unit(result, units).as_deref())));
     }
     rows

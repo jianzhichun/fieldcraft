@@ -97,12 +97,17 @@ pub fn legend_rect(plot: &Plot, painter: &egui::Painter, view: Rect, rect: Rect,
 /// The legend's title: the field with its unit (a mode shape normalised), or the shape drawn.
 fn title(plot: &Plot) -> String {
     if plot.unavailable {
-        return plot.view.contour.map_or_else(|| crate::words::ts("Field unavailable").into(), |f| f.title(&plot.result, &plot.units));
+        return plot
+            .view
+            .contour
+            .map_or_else(|| crate::words::ts("Field unavailable").into(), |f| crate::results::field_title(f, &plot.result, &plot.units));
     }
     match (&plot.contour, plot.mode()) {
-        (Some(l), _) => l.field.title(&plot.result, &plot.units),
+        (Some(l), _) => crate::results::field_title(l.field, &plot.result, &plot.units),
         (None, Some(_)) => crate::words::ts("Mode shape (normalised)").into(),
-        (None, None) if plot.is_fluid() => plot.view.contour.map_or_else(|| crate::words::ts("Flow").into(), |f| f.title(&plot.result, &plot.units)),
+        (None, None) if plot.is_fluid() => {
+            plot.view.contour.map_or_else(|| crate::words::ts("Flow").into(), |f| crate::results::field_title(f, &plot.result, &plot.units))
+        }
         (None, None) => crate::words::ts("Deformed shape").into(),
     }
 }
@@ -406,14 +411,14 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
             }
         })
     });
-    let shown = plot.view.contour.map_or(crate::words::ts("None"), Field::label);
+    let shown = plot.view.contour.map_or(crate::words::ts("None"), crate::results::field_label);
     kit::row(ui, crate::words::ts("Contours"), |ui| {
         kit::bounded_dropdown_menu(ui, "fc_results_field", shown, ui.available_width(), |ui| {
             if ui.selectable_label(plot.view.contour.is_none(), crate::words::ts("None")).clicked() {
                 run.push(("results.contour", json!({"field": "none"})));
             }
             for f in Field::available(&plot.result) {
-                if ui.selectable_label(plot.view.contour == Some(f), f.label()).clicked() {
+                if ui.selectable_label(plot.view.contour == Some(f), crate::results::field_label(f)).clicked() {
                     run.push(("results.contour", json!({"field": f.id()})));
                 }
             }
@@ -428,7 +433,10 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
         ] {
             kit::row(ui, label, |ui| {
                 let mut auto = set.is_none();
-                let tip = crate::words::wfmt!("Follow the field's {}; untick to clamp the legend", if key == "max" { "maximum" } else { "minimum" });
+                let tip = crate::words::wfmt!(
+                    "Follow the field's {}; untick to clamp the legend",
+                    crate::words::ts(if key == "max" { "maximum" } else { "minimum" })
+                );
                 if kit::checkbox(ui, crate::words::ts("Auto"), &mut auto).backing_on_hover_text(tip).changed() {
                     run.push(("results.contour", legend_params(plot, key, if auto { json!("auto") } else { json!(value) })));
                 }
@@ -448,7 +456,7 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     }
     kit::row(ui, crate::words::ts("Show"), |ui| {
         if plot.contour.is_some() {
-            kit::checkbox(ui, "Max/Min", &mut app.ui.result_extremes)
+            kit::checkbox(ui, crate::words::ts("Max/Min"), &mut app.ui.result_extremes)
                 .backing_on_hover_text(crate::words::ts("Mark the nodes of the largest and smallest value"));
         }
         kit::checkbox(ui, crate::words::ts("Loads & BCs"), &mut app.ui.result_symbols)
@@ -939,19 +947,21 @@ pub fn xy_options(s: &fieldcraft_engine::Session, r: &fieldcraft_engine::StepRes
         });
     }
     if let Kind::Explicit(e) = r.kind() {
-        out.extend(xy::ENERGIES.iter().map(|n| (crate::words::wfmt!("Energy: {}", n.replace('_', " ")), json!({"energy": n}), None)));
-        out.extend(xy::HISTORIES.iter().map(|n| (n.replace('_', " "), json!({"history": n}), None)));
+        out.extend(xy::ENERGIES.iter().map(|n| (crate::words::wfmt!("Energy: {}", crate::xy_text::picker(n)), json!({"energy": n}), None)));
+        out.extend(xy::HISTORIES.iter().map(|n| (crate::xy_text::picker(n), json!({"history": n}), None)));
         for node in e.history.nodes.iter().take(8) {
-            out.extend(
-                xy::NODE_QUANTITIES.iter().map(|q| {
-                    (crate::words::wfmt!("History node {node}: {}", q.replace('_', " ")), json!({"history_node": node, "quantity": q}), None)
-                }),
-            );
+            out.extend(xy::NODE_QUANTITIES.iter().map(|q| {
+                (crate::words::wfmt!("History node {node}: {}", crate::xy_text::picker(q)), json!({"history_node": node, "quantity": q}), None)
+            }));
         }
     }
     let linear = matches!(r.kind(), Kind::Static(st) if st.nonlinear.is_none());
     if !linear {
-        out.extend(xy::plottable(r).into_iter().map(|f| (crate::words::wfmt!("{} at a node", f.label()), json!({"field": f.id()}), None)));
+        out.extend(
+            xy::plottable(r)
+                .into_iter()
+                .map(|f| (crate::words::wfmt!("{} at a node", crate::results::field_label(f)), json!({"field": f.id()}), None)),
+        );
     }
     if matches!(r.kind(), Kind::Static(st) if st.nonlinear.is_some()) {
         let mut sets: Vec<&str> = s
@@ -1055,12 +1065,14 @@ fn xy_section(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens, ru
         _ if axis == "mode" => Some(plot.view.mode.saturating_sub(1)),
         _ => None,
     };
-    kit::status_line(ui, s["y"]["label"].as_str().unwrap_or_default(), kit::StatusTone::Dim);
+    let raw = s["y"]["label"].as_str().unwrap_or_default();
+    let y_label = crate::results::xy_field_text(&params["y"], raw);
+    kit::status_line(ui, y_label.as_deref().unwrap_or(raw), kit::StatusTone::Dim);
     let x_name = match axis {
         "load_factor" => "λ",
         "time" => "t",
         "displacement" => "u",
-        _ => "mode",
+        _ => crate::words::ts("mode"),
     };
     let x_unit = match axis {
         "time" => unit_of(Quantity::Time, &plot.units),
@@ -1069,7 +1081,9 @@ fn xy_section(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens, ru
     };
     let line = Line { color: t.accent, points: xs.iter().copied().zip(ys.iter().copied()).collect() };
     let (response, axes) = line_plot(ui, &[line], x_name, x_unit.as_deref(), current.and_then(|i| xs.get(i).copied()), t);
-    let x_label = s["x"]["label"].as_str().unwrap_or_default().to_string();
+    let raw = s["x"]["label"].as_str().unwrap_or_default();
+    let label = crate::xy_text::axis_caption(axis, &params["x"], raw);
+    let x_label = label.as_deref().unwrap_or(raw);
     if response.clicked()
         && let Some(i) = response.interact_pointer_pos().and_then(|p| nearest(axes.x_of(p.x)))
     {
@@ -1316,6 +1330,33 @@ fn reactions_table(ui: &mut egui::Ui, r: &Value, plot: &Plot) {
 mod tests {
     use super::*;
     use crate::results;
+
+    #[test]
+    fn contour_labels_switch_without_changing_field_or_step() {
+        crate::theme::install_look();
+        let mut app = ModelApp::new(fieldcraft_engine::Session::default());
+        app.run("file.sample", json!({"name": "cantilever"})).unwrap();
+        app.run("solve.run", json!({})).unwrap();
+        let reply = app.run("results.contour", json!({"field": "von_mises"})).unwrap();
+        let plot = app.plot().unwrap();
+        for (lang, text, max, min) in [("zh", "等效应力 [MPa]", "最大", "最小"), ("en", "Von Mises stress [MPa]", "Max", "Min")] {
+            let _scope = solidcraft_ui_text::scope(lang);
+            assert_eq!(title(&plot), text);
+            let [hi, lo] = extreme_lines(&plot).unwrap();
+            assert!(hi.0.starts_with(max) && lo.0.starts_with(min));
+            assert_eq!(legend_params(&plot, "max", json!(10))["field"], "von_mises");
+            assert_eq!(plot.view.step, "Load");
+            assert_eq!(reply["contour"]["label"], "Von Mises stress");
+            if lang == "zh" {
+                for field in Field::ALL {
+                    assert_ne!(crate::results::field_label(field), field.label());
+                }
+                let y = json!({"field":"von_mises", "node":7});
+                assert_eq!(crate::results::xy_field_text(&y, "Von Mises stress [psi] at node 7").as_deref(), Some("节点 7 处的等效应力 [psi]"));
+                assert!(crate::results::xy_field_text(&json!({"reaction":"Von Mises stress"}), "Von Mises stress").is_none());
+            }
+        }
+    }
 
     /// #205: nonlinear playback colours each increment by its own stress; a frame without
     /// its own stress (no stress output, or past the step's field cap) says so in the legend.

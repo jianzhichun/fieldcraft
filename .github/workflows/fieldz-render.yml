@@ -35,6 +35,9 @@ jobs:
         run: cargo xtask licences
       - name: Build the render server
         run: cargo build --release --locked -p fieldz-render-server --target ${{ matrix.target }}
+      - name: Verify localized labels in the release build
+        if: runner.os == 'macOS'
+        run: cargo test --release --locked --target ${{ matrix.target }} -p fieldcraft-ui-egui --lib localized_display_
       - name: Pack
         shell: bash
         run: |

@@ -199,7 +199,12 @@ impl ModelApp {
         let params = serde_json::from_str::<Value>(&d.text).ok()?;
         let Some(prep) = self.move_prepared(&params) else {
             // Waiting out the debounce: the sphere as the form has it, nothing cached.
-            return Some(Arc::new(Preview { sphere: self.quick_sphere(&params), nodes: 0, moved: None, note: Some("Preview: updating…".into()) }));
+            return Some(Arc::new(Preview {
+                sphere: self.quick_sphere(&params),
+                nodes: 0,
+                moved: None,
+                note: Some(crate::words::owned("Preview: updating…")),
+            }));
         };
         let preview = match prep {
             Prep::Failed(e) => Some(Preview { sphere: self.quick_sphere(&params), nodes: 0, moved: None, note: Some(e) }),
@@ -207,7 +212,7 @@ impl ModelApp {
                 sphere: self.quick_sphere(&params),
                 nodes: n,
                 moved: None,
-                note: Some(format!("{n} nodes follow: too many for a live preview (over {PREVIEW_NODES}); the move applies on release")),
+                note: Some(crate::words::wfmt!("{n} nodes follow: too many for a live preview (over {PREVIEW_NODES}); the move applies on release")),
             }),
             Prep::Ready(prep) => {
                 let mut out = Preview { sphere: prep.sphere, nodes: prep.nodes(), moved: None, note: None };
@@ -227,7 +232,7 @@ impl ModelApp {
     pub fn node_move_note(&self) -> Option<String> {
         let p = self.node_move_preview()?;
         let Some(m) = &p.moved else { return p.note.clone() };
-        let mut line = format!(
+        let mut line = crate::words::wfmt!(
             "Preview: {} nodes move (largest {:.3}); scaled Jacobian min {:.3} to {:.3}, mean {:.3} to {:.3}; edge ratio max {:.2} to {:.2}; {} worse, {} better",
             m.moved,
             m.max_displacement,
@@ -241,7 +246,7 @@ impl ModelApp {
             m.better
         );
         if m.scale < 1.0 {
-            line.push_str(&format!("; scaled to {:.0}% so that no element inverts", m.scale * 100.0));
+            line.push_str(&crate::words::wfmt!("; scaled to {:.0}% so that no element inverts", m.scale * 100.0));
         }
         Some(line)
     }

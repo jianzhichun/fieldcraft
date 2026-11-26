@@ -21,6 +21,40 @@ use fieldcraft_render::{DisplayMesh, Scene, Vec3};
 use crate::Style;
 use crate::theme::{Tokens, rgb};
 
+/// A built-in result field as shown in the UI; ids and exported titles stay in the engine.
+pub(crate) fn field_label(field: Field) -> &'static str {
+    crate::words::ts(field.label())
+}
+
+pub(crate) fn field_title(field: Field, r: &StepResult, units: &fieldcraft_model::DisplaySystem) -> String {
+    if field.is_mode_shape(r) {
+        return crate::words::wfmt!("{} (mode shape, normalised)", crate::words::ts(field.label().trim_end_matches(" magnitude")));
+    }
+    fieldcraft_engine::results::with_unit(field_label(field), field.unit(r, units).as_deref())
+}
+
+/// Read a nodal XY caption in the UI language without changing its recorded unit.
+/// Other series (e.g. a reaction on a named set) are opaque to this formatter.
+pub(crate) fn xy_field_text(y: &serde_json::Value, raw: &str) -> Option<String> {
+    if let Some(label) = crate::xy_text::caption(y, raw) {
+        return Some(label);
+    }
+    let field = Field::parse(y.get("field")?.as_str()?)?;
+    let node = y.get("node")?.as_u64()?;
+    let title = raw.strip_suffix(&format!(" at node {node}"))?;
+    let modal = field.label().trim_end_matches(" magnitude");
+    let title = if title == format!("{modal} (mode shape, normalised)") {
+        crate::words::wfmt!("{} (mode shape, normalised)", crate::words::ts(modal))
+    } else {
+        let suffix = title.strip_prefix(field.label())?;
+        if !suffix.is_empty() && !(suffix.starts_with(" [") && suffix.ends_with(']')) {
+            return None;
+        }
+        format!("{}{suffix}", field_label(field))
+    };
+    Some(crate::words::wfmt!("{} at node {node}", title))
+}
+
 /// Animation frames per cycle, and the cycle's length in seconds.
 pub const FRAMES: u64 = 24;
 pub const PERIOD: f64 = 2.0;
