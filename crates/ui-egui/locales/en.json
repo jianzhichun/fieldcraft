@@ -504,5 +504,11 @@
   "cap.extra.change_workspace": "Change workspace",
   "cap.extra.more_toolbar_panels": "More toolbar panels",
   "cap.extra.current": "current",
-  "cap.extra.soon": "soon"
+  "cap.extra.soon": "soon",
+  "ui.kit.search_commands": "Search commands",
+  "ui.kit.search": "Search",
+  "ui.kit.active": "Active",
+  "ui.kit.delete": "Delete",
+  "ui.kit.enable_rule": "Enable rule",
+  "ui.kit.retained_source": "Retained source"
 }

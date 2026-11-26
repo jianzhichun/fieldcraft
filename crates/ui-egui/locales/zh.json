@@ -512,5 +512,11 @@
   "workspace.analysis.about": "检查模型、写出计算文件并求解",
   "workspace.analysis.tabs": "求解 · 工具",
   "workspace.results.about": "变形形状、云图、模态和探针",
-  "workspace.results.tabs": "结果 · 工具"
+  "workspace.results.tabs": "结果 · 工具",
+  "ui.kit.search_commands": "搜索命令",
+  "ui.kit.search": "搜索",
+  "ui.kit.active": "生效",
+  "ui.kit.delete": "删除",
+  "ui.kit.enable_rule": "启用规则",
+  "ui.kit.retained_source": "保留来源"
 }
