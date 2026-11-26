@@ -721,7 +721,7 @@ mod tests {
             "Write the reaction sums to a CSV file",
             "Write the node's results to a CSV file",
             "Show this view",
-            "Ask GitHub Releases whether a newer FieldCraft is published",
+            "Ask GitHub Releases whether a newer FieldZ is published",
             "Rename this boundary condition: every definition that refers to it follows",
             "Write the series to a CSV file",
             "Streamlines from the inlet",

@@ -80,6 +80,10 @@ fn read_input(app: &ModelApp, form: &ReportForm) -> Result<Input, String> {
 impl ModelApp {
     /// Open Help › Report a Bug, for `crash` (a report's id) or what happened last.
     pub fn report_bug(&mut self, crash: Option<String>) {
+        // An embedded window (the render server) has no Report a bug flow.
+        if self.embedded {
+            return;
+        }
         let mut form = ReportForm {
             observed: if crash.is_some() { String::new() } else { self.last_error.clone().unwrap_or_default() },
             crash,
@@ -229,10 +233,10 @@ fn size(bytes: usize) -> String {
 
 fn kind_label(kind: &str) -> &'static str {
     match kind {
-        "unclean_exit" => "FieldCraft closed unexpectedly",
+        "unclean_exit" => "FieldZ closed unexpectedly",
         "command_panic" => "A command hit an internal error",
         "solver_error" => "A solve stopped",
-        _ => "FieldCraft hit an internal error",
+        _ => "FieldZ hit an internal error",
     }
 }
 
@@ -252,8 +256,8 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
                     message(
                         ui,
                         match first.kind.as_str() {
-                            "unclean_exit" => "FieldCraft closed unexpectedly the last time it ran.",
-                            _ => "FieldCraft hit an internal error the last time it ran.",
+                            "unclean_exit" => "FieldZ closed unexpectedly the last time it ran.",
+                            _ => "FieldZ hit an internal error the last time it ran.",
                         },
                     );
                     if reports.len() > 1 {
@@ -481,7 +485,7 @@ mod tests {
         let solver = Summary { kind: "solver_error".into(), ..quiet.clone() };
         app.announce_crashes(&[solver]);
         assert_eq!(app.prompt, None, "ordinary solver records do not announce an application crash");
-        let crashed = Summary { kind: "unclean_exit".into(), message: "FieldCraft ended without a clean exit".into(), ..quiet };
+        let crashed = Summary { kind: "unclean_exit".into(), message: "FieldZ ended without a clean exit".into(), ..quiet };
         app.announce_crashes(std::slice::from_ref(&crashed));
         assert!(matches!(&app.prompt, Some(Prompt::Crashed(r)) if r.len() == 1));
         app.report_bug(Some(crashed.id.clone()));

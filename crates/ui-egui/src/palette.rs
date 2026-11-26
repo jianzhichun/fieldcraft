@@ -160,9 +160,16 @@ pub fn popup(app: &mut ModelApp, ctx: &egui::Context) {
         // Enter while the search is open, as SolidCraft's search reads it: the field holds the focus
         // (it asks for it every frame), so its own lost-focus never reports the key.
         let entered = ui.input(|i| i.key_pressed(egui::Key::Enter));
-        // Searched again only when the query changes.
+        // Searched again only when the query changes. An embedded window has no Report a bug
+        // or update-check entry.
         if app.search.as_ref().is_none_or(|(q, _)| *q != app.palette_text) {
-            app.search = Some((app.palette_text.clone(), std::sync::Arc::new(matches(&app.palette_text))));
+            let hits = matches(&app.palette_text);
+            let hits = if app.embedded {
+                hits.into_iter().filter(|h| !matches!(h.id, "diagnostics.bug_report" | "app.update.check")).collect()
+            } else {
+                hits
+            };
+            app.search = Some((app.palette_text.clone(), std::sync::Arc::new(hits)));
         }
         let list = app.search.as_ref().map(|(_, l)| l.clone()).unwrap_or_default();
         // `id {json}` typed here (say, typing began with no field focused) runs as typed.

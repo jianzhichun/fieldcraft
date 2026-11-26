@@ -124,9 +124,9 @@ impl ModelApp {
             self.set_status(format!("Cannot reinstall: {why}"), true);
             return;
         }
-        u.busy = Some(format!("Downloading FieldCraft {}…", crate::VERSION));
+        u.busy = Some(format!("Downloading FieldZ {}…", crate::VERSION));
         (u.host.start)(Job::Reinstall);
-        self.set_status(format!("Downloading FieldCraft {} to reinstall it…", crate::VERSION), false);
+        self.set_status(format!("Downloading FieldZ {} to reinstall it…", crate::VERSION), false);
     }
 
     /// The notice's Install: download and verify, then ask to restart. A copy that cannot
@@ -134,15 +134,15 @@ impl ModelApp {
     pub fn install_update(&mut self, ctx: &egui::Context) {
         let Some(u) = &mut self.updates else { return };
         let Some(release) = u.available.clone() else { return };
-        let blocked = u.host.unsupported.clone().or_else(|| (!release.signed()).then(|| format!("FieldCraft {} is not signed", release.version)));
+        let blocked = u.host.unsupported.clone().or_else(|| (!release.signed()).then(|| format!("FieldZ {} is not signed", release.version)));
         if let Some(why) = blocked {
             self.set_status(format!("{why}: opening the download page"), true);
             self.open_link(ctx, &release.url);
             return;
         }
-        u.busy = Some(format!("Downloading FieldCraft {}…", release.version));
+        u.busy = Some(format!("Downloading FieldZ {}…", release.version));
         (u.host.start)(Job::Stage(release.clone()));
-        self.set_status(format!("Downloading FieldCraft {}…", release.version), false);
+        self.set_status(format!("Downloading FieldZ {}…", release.version), false);
     }
 
     /// Skip the offered version: the automatic check no longer offers it.
@@ -179,7 +179,7 @@ impl ModelApp {
                 && let Some((s, Finish::Swap(_))) = &u.staged
             {
                 let v = s.version.to_string();
-                self.set_status(format!("FieldCraft {v} installs when you quit"), false);
+                self.set_status(format!("FieldZ {v} installs when you quit"), false);
             }
             return;
         }
@@ -235,14 +235,14 @@ impl ModelApp {
                         let v = check.latest.version.to_string();
                         u.available = Some(check.latest);
                         if manual {
-                            self.set_status(format!("FieldCraft {v} is available"), false);
+                            self.set_status(format!("FieldZ {v} is available"), false);
                         }
                     }
                     Ok(check) => {
                         // Nothing newer (or skipped): a notice from an earlier check goes.
                         u.available = None;
                         if manual {
-                            self.set_status(format!("FieldCraft {} is up to date", check.current), false);
+                            self.set_status(format!("FieldZ {} is up to date", check.current), false);
                         }
                     }
                     Err(e) if manual => self.set_status(format!("Could not check for updates: {e}"), true),
@@ -313,7 +313,7 @@ pub fn notice(app: &mut ModelApp, ui: &mut egui::Ui) {
         if ui.add(egui::Link::new(small("Reload to update"))).backing_on_hover_text(tip).clicked() {
             reload();
         }
-        ui.label(small("A new version of FieldCraft is available —").color(t.text));
+        ui.label(small("A new version of FieldZ is available —").color(t.text));
         return;
     }
     let Some(u) = &app.updates else { return };
@@ -331,7 +331,7 @@ pub fn notice(app: &mut ModelApp, ui: &mut egui::Ui) {
         ui.add(egui::Link::new(small("Install"))).backing_on_hover_text("Download, verify and install it; you choose when to restart").clicked();
     ui.label(small("·").color(t.text_dim));
     let notes = ui.add(egui::Link::new(small("What's new"))).backing_on_hover_text(release.url.as_str()).clicked();
-    ui.label(small(&format!("FieldCraft {} is available —", release.version)).color(t.text));
+    ui.label(small(&format!("FieldZ {} is available —", release.version)).color(t.text));
     if notes {
         app.open_link(ui.ctx(), &release.url);
     }
@@ -374,7 +374,7 @@ pub(crate) fn offer_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
         |ui: &mut egui::Ui, id: &str, label: &str, tip: &str| crate::frame::menu_row(ui, id, label, None, true).backing_on_hover_text(tip).clicked();
     match offer(app) {
         Some(Offer::Reload) => {
-            crate::frame::menu_heading(ui, "A new version of FieldCraft is available");
+            crate::frame::menu_heading(ui, "A new version of FieldZ is available");
             let tip = if app.has_unsaved_work() { "Reloads the page; you are asked about the unsaved changes first" } else { "Reloads the page" };
             if row(ui, "update.reload", "Reload to Update", tip)
                 && let Some(reload) = &app.reload
@@ -384,7 +384,7 @@ pub(crate) fn offer_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
         }
         Some(Offer::Busy(busy)) => crate::frame::menu_heading(ui, &busy),
         Some(Offer::Release(version)) => {
-            crate::frame::menu_heading(ui, &format!("FieldCraft {version} is available"));
+            crate::frame::menu_heading(ui, &format!("FieldZ {version} is available"));
             let url = app.updates.as_ref().and_then(|u| u.available.as_ref()).map(|r| r.url.clone()).unwrap_or_default();
             let notes = row(ui, "update.notes", "What's New", &url);
             let install = row(ui, "update.install", "Install", "Download, verify and install it; you choose when to restart");
@@ -417,28 +417,28 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
         Finish::Swap(_) => ("Restart Now", "Later"),
         Finish::Package { .. } => ("Open with Installer", "Close"),
     };
-    let (closed, action) = crate::frame::window(egui::Id::unique("fc_update"), UPDATE_ICON, "Update FieldCraft", crate::frame::Width::Normal)
+    let (closed, action) = crate::frame::window(egui::Id::unique("fc_update"), UPDATE_ICON, "Update FieldZ", crate::frame::Width::Normal)
         .actions(ok, cancel, None)
         .show(ctx, true, |ui| match &finish {
             Finish::Swap(_) => {
                 message(
                     ui,
                     &if reinstall {
-                        format!("FieldCraft {} was downloaded again and verified. Restart to reinstall it?", staged.version)
+                        format!("FieldZ {} was downloaded again and verified. Restart to reinstall it?", staged.version)
                     } else {
-                        format!("FieldCraft {} is downloaded and verified. Restart now to finish installing it?", staged.version)
+                        format!("FieldZ {} is downloaded and verified. Restart now to finish installing it?", staged.version)
                     },
                 );
                 note(
                     ui,
                     &format!(
-                        "It replaces {}. Unsaved changes are saved or asked about first; Later installs it when you quit FieldCraft.",
+                        "It replaces {}. Unsaved changes are saved or asked about first; Later installs it when you quit FieldZ.",
                         staged.install.describe()
                     ),
                 );
             }
             Finish::Package { file, command } => {
-                message(ui, &format!("FieldCraft {} is downloaded and verified:", staged.version));
+                message(ui, &format!("FieldZ {} is downloaded and verified:", staged.version));
                 kit::text(ui, &file.display().to_string(), kit::Text::MonoNote("fc_update_package"));
                 message(ui, "Install it with your system's package manager:");
                 kit::read_only_text(ui, command);
@@ -578,7 +578,7 @@ mod tests {
 
         tx.send(Event::Checked { manual: true, result: Ok(Check { current: current.clone(), latest: release(crate::VERSION) }) }).unwrap();
         a.poll_updates(&ctx);
-        assert_eq!(a.status.as_ref().map(|s| s.text.clone()), Some(format!("FieldCraft {} is up to date", crate::VERSION)));
+        assert_eq!(a.status.as_ref().map(|s| s.text.clone()), Some(format!("FieldZ {} is up to date", crate::VERSION)));
         assert_eq!(a.update_offered(), None, "the earlier offer goes");
         tx.send(Event::Checked { manual: false, result: Err("offline".into()) }).unwrap();
         a.status = None;

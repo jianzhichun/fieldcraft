@@ -280,7 +280,7 @@ fn no_page_shows_json_or_ids() {
     type_text(&mut app, &ctx, "e");
     let window = app.layout.get("settings").copied().expect("Settings is drawn");
     texts.extend(frames(&mut app, &ctx, 1).into_iter().filter(|d| window.contains(d.at)).flat_map(|d| std::iter::once(d.label).chain(d.hover)));
-    for reached in ["Display units", "Translucent browser", "Share anonymous usage", "Check for updates automatically", "FieldCraft 9.9.9"] {
+    for reached in ["Display units", "Translucent browser", "Share anonymous usage", "Check for updates automatically", "FieldZ 9.9.9"] {
         assert!(texts.iter().any(|t| t == reached), "{reached} not drawn: {texts:?}");
     }
     let bad: Vec<&String> =

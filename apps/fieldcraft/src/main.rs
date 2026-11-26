@@ -307,7 +307,7 @@ fn main() -> eframe::Result {
     crash::phase("window");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("FieldCraft")
+            .with_title("FieldZ")
             .with_app_id(APP_ID)
             .with_icon(app_icon())
             .with_inner_size(WINDOW_SIZE)

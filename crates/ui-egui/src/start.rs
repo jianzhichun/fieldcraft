@@ -161,7 +161,7 @@ fn contents<'a>(app: &'a ModelApp, ctx: &egui::Context, interactive: bool) -> Pa
         RailItem::Entry(RailEntry { id: id.into(), label: label.into(), shortcut: shortcut.into(), selected, enabled: true, chosen })
     };
     let section = app.start_page.section;
-    let rail = vec![
+    let mut rail = vec![
         entry("start:start", "Start", String::new(), section == Section::Start, Action::Section(Section::Start)),
         entry("start:new", "New", key("N"), false, Action::New),
         entry("start:open", "Open…", key("O"), false, Action::Open(None)),
@@ -172,6 +172,10 @@ fn contents<'a>(app: &'a ModelApp, ctx: &egui::Context, interactive: bool) -> Pa
         entry("start:crash_reports", "Crash Reports…", String::new(), false, Action::CrashReports),
         entry("start:report_bug", "Report a Bug…", String::new(), false, Action::ReportBug),
     ];
+    // An embedded window (the render server) has no Report a bug entry.
+    if app.embedded {
+        rail.retain(|item| !matches!(item, RailItem::Entry(entry) if entry.id == "start:report_bug"));
+    }
     // An error (a file that would not open) stays under the hint until the next message.
     let error = app.status.as_ref().filter(|s| s.error).map(|s| Cow::from(s.text.as_str()));
     let (title, hint, body) = match section {
@@ -182,7 +186,7 @@ fn contents<'a>(app: &'a ModelApp, ctx: &egui::Context, interactive: bool) -> Pa
         ),
         Section::Recover => (
             "Recover",
-            "Models autosaved by a FieldCraft that crashed or closed with unsaved changes.",
+            "Models autosaved by a FieldZ that crashed or closed with unsaved changes.",
             Body::Reviews(recover(app.start_page.recoverable.as_deref().unwrap_or_default())),
         ),
     };

@@ -98,6 +98,9 @@ enum Event {
     Closed(String),
 }
 
+/// The longest repaint delay worth sleeping for: anything above is "no repaint" (egui sends `Duration::MAX`).
+const REPAINT_CEILING: Duration = Duration::from_secs(3600);
+
 /// A frame's rectangles and bytes, ready for the writer.
 struct Frame {
     seq: u64,
@@ -139,7 +142,9 @@ impl Host {
         let (w, h, dpr_used) = fit(cfg.width, cfg.height, cfg.dpr)?;
         let ctx = egui::Context::default();
         fieldcraft_ui_egui::theme::apply(&ctx, cfg.dark);
-        let mut app = ModelApp::new(session);
+        // The host's window shows the workspace, not the desktop app's community and updater
+        // chrome: no Donate/Discord, Report a bug, Update offer or version in the bar.
+        let mut app = ModelApp::new(session).with_embedded();
         if let Some(rs) = painter.render_state() {
             // The whole-window pass is 1 sample with a depth buffer (the viewport's pipelines
             // expect one); the 3D viewport paints into this same pass.
@@ -555,8 +560,9 @@ impl Host {
         let primitives = self.ctx.tessellate(out.shapes, ppp);
         // The app's own pacing (a job in progress asks for a pass every 50 ms).
         if let Some(viewport) = out.viewport_output.get(&egui::ViewportId::ROOT) {
+            // egui asks for nothing with `Duration::MAX` ("no repaint"): adding it to an `Instant` overflows.
             let delay = viewport.repaint_delay;
-            if !delay.is_zero() {
+            if !delay.is_zero() && delay < REPAINT_CEILING {
                 let at = Instant::now() + delay;
                 self.next_repaint = Some(self.next_repaint.map_or(at, |t| t.min(at)));
             }

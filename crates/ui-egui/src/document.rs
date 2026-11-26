@@ -120,6 +120,8 @@ impl ModelApp {
             imported_document: _,
             custom_titlebar: _,
             integrated_titlebar: _,
+            // How this run presents the window, not the document.
+            embedded: _,
             palette_text: _,
             tree_open,
             timeline_open,

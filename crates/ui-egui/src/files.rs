@@ -97,13 +97,13 @@ pub(crate) struct PendingPicker {
     document: u64,
 }
 
-const MODEL: Filter = Filter { name: "FieldCraft model", extensions: &["fieldcraft"] };
+const MODEL: Filter = Filter { name: "FieldZ model", extensions: &["fieldcraft"] };
 const DESIGN: Filter = Filter { name: "SolidCraft design", extensions: &["solidcraft"] };
 const MESH: Filter = Filter { name: "Face-tagged mesh (3MF)", extensions: &["3mf", "3MF"] };
 const ORPHAN: Filter = Filter { name: "Orphan mesh (Gmsh MSH 4.1)", extensions: &["msh", "MSH"] };
 /// The Delete confirmation's icon: the kit's bin, as its delete buttons draw.
 pub(crate) const DELETE_ICON: &str = "delete";
-const SCRIPT: Filter = Filter { name: "FieldCraft script (JSON)", extensions: &["json", "JSON"] };
+const SCRIPT: Filter = Filter { name: "FieldZ script (JSON)", extensions: &["json", "JSON"] };
 /// Largest script File › Run Script… reads (bytes), as `fieldcraft-cli run`.
 const MAX_SCRIPT_BYTES: u64 = 256 * 1024 * 1024;
 const ANY: Filter = Filter { name: "Models, designs and meshes", extensions: &["fieldcraft", "solidcraft", "3mf", "3MF", "msh", "MSH"] };
@@ -951,10 +951,7 @@ impl ModelApp {
     /// replacing unsaved changes asks first.
     pub fn open_path(&mut self, path: &str) {
         let Some(kind) = Kind::of(path) else {
-            self.set_status(
-                format!("{path}: FieldCraft opens .fieldcraft models, .solidcraft designs, .3mf tagged meshes and .msh orphan meshes"),
-                true,
-            );
+            self.set_status(format!("{path}: FieldZ opens .fieldcraft models, .solidcraft designs, .3mf tagged meshes and .msh orphan meshes"), true);
             return;
         };
         if kind == Kind::Model && self.has_unsaved_work() {

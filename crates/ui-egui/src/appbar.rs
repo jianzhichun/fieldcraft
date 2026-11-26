@@ -15,6 +15,7 @@
 use egui::{Color32, FontId, Rect, Sense, Stroke, pos2, vec2};
 use serde_json::json;
 use solidcraft_ui_kit::app_bar::{self, BarAction, BarButton};
+use solidcraft_ui_kit::app_bar_items::Layout;
 use solidcraft_ui_kit::window_chrome;
 use solidcraft_ui_kit::{self as kit, BackingTooltipExt as _};
 
@@ -82,6 +83,22 @@ fn fullscreen(ctx: &egui::Context) -> bool {
     ctx.input(|i| i.viewport().fullscreen.unwrap_or(false))
 }
 
+/// The bar's items in the embedded window: the desktop arrangement without the community pills,
+/// Report a bug and the version. The kit always lays out a Report slot from [`app_bar::AppBar`]'s
+/// `report`, so the embedded host hands it a saved arrangement that leaves those out.
+static EMBEDDED_ITEMS: std::sync::LazyLock<Layout> = std::sync::LazyLock::new(|| {
+    let mut layout = Layout::default_for(["theme"]);
+    for item in &mut layout.items {
+        if matches!(item.id.as_str(), "donate" | "discord" | "report" | "version") {
+            item.shown = false;
+        }
+    }
+    layout
+});
+
+/// The quick-access ids of [`EMBEDDED_ITEMS`]: the theme button, which the bar leaves to the app.
+const EMBEDDED_QUICK: &[&str] = &["theme"];
+
 /// This version's release notes.
 fn release_notes() -> String {
     format!("https://github.com/tangency-labs/fieldcraft/releases/tag/v{}", crate::VERSION)
@@ -114,17 +131,20 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
     let busy = app.busy().is_some();
     let (save_tip, undo_tip, redo_tip) =
         (format!("Save ({})", shortcut("S")), format!("Undo ({})", shortcut("Z")), format!("Redo ({})", shortcut("Shift+Z")));
-    let version = format!("v{}", crate::VERSION);
+    let version_text = format!("v{}", crate::VERSION);
     let url = release_notes();
+    let version = (!app.embedded).then(|| app_bar::Version { text: &version_text, url: &url });
     let button = |id, icon, tip, enabled, wide_only| BarButton { id, icon, tip, enabled, narrow: true, wide_only };
     let chrome = |id, icon, tip| BarButton { id, icon, tip, enabled: true, narrow: false, wide_only: false };
+    let pills = if app.embedded { Vec::new() } else { crate::links::pills(&app.prefs, r.width() >= crate::links::PILL_LABEL_MIN) };
     let data = app_bar::AppBar {
-        // The kit's default arrangement, with no movable items and no app control before Home.
-        items: None,
-        quick_ids: &[],
+        // The kit's default arrangement, with no movable items and no app control before Home;
+        // embedded, the same minus the community pills, Report a bug and the version.
+        items: app.embedded.then_some(&*EMBEDDED_ITEMS),
+        quick_ids: if app.embedded { EMBEDDED_QUICK } else { &[] },
         leading: None,
         mark: &mark,
-        name: "FieldCraft",
+        name: "FieldZ",
         home: chrome("home", "home", "Start: new, open, recent files and samples"),
         file: "File",
         file_open: app.ui.menu.as_deref() == Some("file"),
@@ -141,11 +161,11 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
             tip: "Report a bug: draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
             icon_only: false,
         },
-        pills: crate::links::pills(&app.prefs, r.width() >= crate::links::PILL_LABEL_MIN),
+        pills,
         search: false,
         search_shortcut: None,
         assistant: false,
-        version: Some(app_bar::Version { text: &version, url: &url }),
+        version,
         handles: HANDLES,
     };
     // The room the offer span asks for: Solve and, when one is on offer, its Update pill, both with
@@ -251,6 +271,9 @@ const PILL_TAB_ROOM: f32 = 300.0;
 /// when one is on offer, with the gap between them.
 fn offer_room(app: &mut ModelApp, ui: &mut egui::Ui) -> f32 {
     let solve = kit::icon_label_width(ui, SOLVE, Some(SOLVE_ICON), true);
+    if app.embedded {
+        return solve;
+    }
     update_pill_width(app, ui).map_or(solve, |pill| solve + 8.0 + pill)
 }
 
@@ -274,11 +297,14 @@ fn update_pill_width(app: &mut ModelApp, ui: &mut egui::Ui) -> Option<f32> {
 /// None when nothing is on offer or there is no room.
 fn update_pill(app: &mut ModelApp, ui: &mut egui::Ui, span: Rect, labeled: bool) -> Option<Rect> {
     use crate::updates::Offer;
+    if app.embedded {
+        return None;
+    }
     let offer = crate::updates::offer(app)?;
     let (full, tip) = match &offer {
-        Offer::Release(version) => (format!("Update to {version}"), format!("FieldCraft {version} is available")),
+        Offer::Release(version) => (format!("Update to {version}"), format!("FieldZ {version} is available")),
         Offer::Busy(busy) => ("Update".to_string(), busy.clone()),
-        Offer::Reload => ("Reload to update".to_string(), "A new version of FieldCraft is available".to_string()),
+        Offer::Reload => ("Reload to update".to_string(), "A new version of FieldZ is available".to_string()),
     };
     let k = solidcraft_theme::Tokens::get();
     let font = FontId::proportional(k.font_label);
@@ -455,23 +481,28 @@ fn help_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
     crate::frame::menu_separator(ui);
     let row =
         |ui: &mut egui::Ui, id: &str, label: &str, tip: &str| crate::frame::menu_row(ui, id, label, None, true).backing_on_hover_text(tip).clicked();
-    let report = row(
-        ui,
-        "help.report_bug",
-        "Report a Bug…",
-        "Draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
-    );
+    let mut report = false;
+    if !app.embedded {
+        report = row(
+            ui,
+            "help.report_bug",
+            "Report a Bug…",
+            "Draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
+        );
+    }
     let (mut check, mut reinstall) = (false, false);
-    if app.updates_available() {
-        check = row(ui, "help.check_updates", "Check for Updates", "Ask GitHub Releases whether a newer FieldCraft is published");
+    if !app.embedded && app.updates_available() {
+        check = row(ui, "help.check_updates", "Check for Updates", "Ask GitHub Releases whether a newer FieldZ is published");
         reinstall =
-            row(ui, "help.reinstall", "Reinstall FieldCraft…", "Download this version again, verify it and swap it in, to repair a damaged install");
+            row(ui, "help.reinstall", "Reinstall FieldZ…", "Download this version again, verify it and swap it in, to repair a damaged install");
     }
     let crashes = row(ui, "help.crash_reports", "Crash Reports…", "The crash reports saved on this computer: report, copy or delete them");
     let settings = row(ui, "help.settings", "Settings…", "Units, the window, privacy and updates");
     crate::frame::menu_separator(ui);
-    note(ui, &format!("FieldCraft {}", crate::VERSION));
-    // Everything the menu drew, down to the version (control channel, tests).
+    if !app.embedded {
+        note(ui, &format!("FieldZ {}", crate::VERSION));
+    }
+    // Everything the menu drew (control channel, tests).
     app.place("menu:help", ui.min_rect());
     if report {
         app.report_bug(None);

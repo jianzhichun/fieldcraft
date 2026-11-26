@@ -546,6 +546,10 @@ pub struct ModelApp {
     pub custom_titlebar: bool,
     /// The title bar runs under the macOS traffic lights.
     pub integrated_titlebar: bool,
+    /// This run is embedded in another product's window (the render server): the bar leaves out
+    /// the community pills, Report a bug, the Update offer and the version, which belong to the
+    /// desktop app.
+    pub embedded: bool,
     /// The command search's query.
     pub palette_text: String,
     /// Browser sections that are unfolded.
@@ -669,6 +673,7 @@ impl ModelApp {
             imported_document: None,
             custom_titlebar: false,
             integrated_titlebar: false,
+            embedded: false,
             palette_text: String::new(),
             tree_open: document::TREE_OPEN.into_iter().map(str::to_string).collect(),
             timeline_open: Default::default(),
@@ -691,6 +696,13 @@ impl ModelApp {
     /// Serve control-channel requests (see [`control`]).
     pub fn with_control(mut self, rx: impl Into<inbox::Inbox<ControlRequest>>) -> Self {
         self.control_rx = Some(rx.into());
+        self
+    }
+
+    /// Draw the window as another product's embedded view: no community pills, Report a bug,
+    /// Update offer or version in the bar ([`ModelApp::embedded`]).
+    pub fn with_embedded(mut self) -> Self {
+        self.embedded = true;
         self
     }
 
