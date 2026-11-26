@@ -1,0 +1,72 @@
+# FieldZ's render server (the app's own UI drawn offscreen and streamed to an embedding host): CLI-less binary for the hosts that
+# ship it. A tag fieldz-render-v<version>-<n> builds Windows x64 and macOS aarch64, packs each with the licence files and publishes
+# a release with SHA256SUMS.txt; FieldZ pins those files by sha256.
+name: fieldz-render
+on:
+  push:
+    tags: ['fieldz-render-v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, platform: windows-x64, exe: .exe, pack: zip }
+          - { os: macos-15, target: aarch64-apple-darwin, platform: macos-aarch64, exe: '', pack: zip }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    env:
+      CARGO_PROFILE_RELEASE_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: fieldz-render-${{ matrix.platform }}
+          cache-on-failure: true
+      - name: THIRD-PARTY-LICENSES.txt
+        run: cargo xtask licences
+      - name: Build the render server
+        run: cargo build --release --locked -p fieldz-render-server --target ${{ matrix.target }}
+      - name: Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="$GITHUB_REF_NAME-${{ matrix.platform }}"
+          mkdir -p "dist/$name"
+          bin="target/${{ matrix.target }}/release/fieldz-render-server${{ matrix.exe }}"
+          if [ "${{ runner.os }}" != Windows ]; then strip "$bin"; fi
+          if [ "${{ runner.os }}" = macOS ]; then codesign --force --sign - "$bin" && codesign --verify "$bin"; fi
+          cp "$bin" LICENSE-APACHE LICENSE-MIT NOTICE THIRD-PARTY-LICENSES.txt "dist/$name/"
+          cd dist
+          if [ "${{ matrix.pack }}" = zip ]; then
+            if [ "${{ runner.os }}" = Windows ]; then 7z a -tzip "$name.zip" "$name" >/dev/null; else zip -qr "$name.zip" "$name"; fi
+          else tar -czf "$name.tar.gz" "$name"; fi
+          rm -rf "$name"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fieldz-render-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$GITHUB_REF_NAME" --notes "Render server built from ${GITHUB_SHA}. Unsigned builds; verify with SHA256SUMS.txt." *
