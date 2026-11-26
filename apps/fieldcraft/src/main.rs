@@ -1,6 +1,6 @@
 //! FieldCraft desktop app.
 //!
-//! Usage: `fieldcraft [--sample [NAME]] [--control PORT] [FILE…]` (files open as if dropped on the
+//! Usage: `fieldcraft [--sample [NAME]] [--control PORT] [--lang zh|en] [FILE…]` (files open as if dropped on the
 //! window; NAME is a sample of `fieldcraft_engine::sample`, `parts` by default)
 //!
 //! `--sample` opens a sample model (`fieldcraft_engine::sample`). `--control PORT` (or
@@ -22,8 +22,7 @@ use fieldcraft_engine::autosave::{self, Autosaver};
 use fieldcraft_engine::{Session, crash, logfile};
 use fieldcraft_ui_egui::{FilePicker, ModelApp, Services};
 
-const USAGE: &str =
-    "usage: fieldcraft [--sample [NAME]] [--control PORT] [FILE…]  (NAME: a sample, docs/examples.md; FILE: .fieldcraft, .solidcraft or .3mf)";
+const USAGE: &str = "usage: fieldcraft [--sample [NAME]] [--control PORT] [--lang zh|en] [FILE…]  (NAME: a sample, docs/examples.md; FILE: .fieldcraft, .solidcraft or .3mf)";
 const DEPTH_BITS: u8 = 24;
 /// The window draws its own caption buttons where the OS ones would sit apart from the app bar.
 const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
@@ -237,6 +236,8 @@ struct Args {
     /// The sample to open (`--sample [NAME]`).
     sample: Option<String>,
     control: Option<u16>,
+    /// The interface language (`--lang zh|en`); `FIELDCRAFT_LANG` or Chinese when absent.
+    language: Option<String>,
     /// Files to open (models, designs, tagged meshes).
     files: Vec<String>,
 }
@@ -263,6 +264,13 @@ fn parse_args(args: impl IntoIterator<Item = String>, env_port: Option<String>) 
             "--control" => {
                 let port = args.next().ok_or("--control needs a port")?;
                 out.control = Some(port.parse().map_err(|_| format!("--control: `{port}` is not a port number"))?);
+            }
+            "--lang" => {
+                let lang = args.next().ok_or("--lang needs `zh` or `en`")?;
+                if lang != "zh" && lang != "en" {
+                    return Err(format!("--lang: `{lang}` is not `zh` or `en`"));
+                }
+                out.language = Some(lang);
             }
             "--version" | "-V" => {
                 println!("{}", version_line());
@@ -304,6 +312,15 @@ fn main() -> eframe::Result {
     #[cfg(windows)]
     native_crash::install();
     eframe::egui_wgpu::set_startup_hook(startup_step);
+    // The interface language, chosen once: `--lang`, else `FIELDCRAFT_LANG`, else Chinese. The
+    // catalogues are installed first so the scope resolves to them; the scope outlives the event
+    // loop, and every UI text read on this thread follows it.
+    let language = match args.language.as_deref() {
+        Some(language) => language,
+        None => fieldcraft_ui_egui::theme::language_preference(),
+    };
+    fieldcraft_ui_egui::theme::install_look();
+    let _language = solidcraft_ui_text::scope(language);
     crash::phase("window");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -436,7 +453,7 @@ mod tests {
         assert_eq!(parse(&[], None), Ok(Some(Args::default())));
         assert_eq!(
             parse(&["--sample", "--control", "7070"], None),
-            Ok(Some(Args { sample: Some("parts".into()), control: Some(7070), files: vec![] }))
+            Ok(Some(Args { sample: Some("parts".into()), control: Some(7070), language: None, files: vec![] }))
         );
         assert_eq!(parse(&[], Some("9000")), Ok(Some(Args { control: Some(9000), ..Default::default() })));
         assert_eq!(parse(&[], Some("nope")), Ok(Some(Args::default())));
@@ -444,6 +461,8 @@ mod tests {
         assert!(parse(&["--control", "99999"], None).is_err());
         assert!(parse(&["--frobnicate"], None).is_err());
         assert_eq!(parse(&["--sample", "impact"], None).map(|a| a.and_then(|a| a.sample)), Ok(Some("impact".into())));
+        assert_eq!(parse(&["--lang", "en"], None).map(|a| a.and_then(|a| a.language)), Ok(Some("en".into())));
+        assert!(parse(&["--lang", "fr"], None).is_err());
         let a = parse(&["--sample", "x.fieldcraft"], None).unwrap().unwrap();
         assert_eq!((a.sample.as_deref(), a.files), (Some("parts"), vec!["x.fieldcraft".to_string()]));
         assert_eq!(parse(&["a.fieldcraft", "--sample"], None).map(|a| a.map(|a| a.files)), Ok(Some(vec!["a.fieldcraft".to_string()])));

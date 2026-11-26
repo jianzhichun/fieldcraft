@@ -77,7 +77,7 @@ pub fn row<R>(ui: &mut Ui, s: &Style, label: &str, required: bool, help: &str, a
         if required {
             let star = egui::Rect::from_min_size(egui::pos2(x, mark_y - 7.0), vec2(STAR_W, 14.0));
             ui.painter().text(egui::pos2(x, mark_y), egui::Align2::LEFT_CENTER, "*", label_font(ui), s.required);
-            ui.interact(star, ui.scope_id().with("required"), egui::Sense::hover()).backing_on_hover_text("Required");
+            ui.interact(star, ui.scope_id().with("required"), egui::Sense::hover()).backing_on_hover_text(crate::words::ts("Required"));
             x += STAR_W;
         }
         if !help.is_empty() {

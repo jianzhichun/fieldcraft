@@ -63,31 +63,35 @@ pub fn summary_in(command: &str, v: &Value, units: Option<&DisplaySystem>) -> St
     let line = match command {
         "model.check" => {
             let (e, w) = (v["errors"].as_u64().unwrap_or(0), v["warnings"].as_u64().unwrap_or(0));
-            if e + w == 0 { "ready to solve, no issues".to_string() } else { format!("{}, {}", plural(e, "error"), plural(w, "warning")) }
+            if e + w == 0 {
+                crate::words::ts("ready to solve, no issues").to_string()
+            } else {
+                format!("{}, {}", plural(e, "error"), plural(w, "warning"))
+            }
         }
-        "model.activity" => format!(
+        "model.activity" => crate::words::wfmt!(
             "{}, {}, {}",
             plural(count("steps") as u64, "step"),
-            plural(count("boundary_conditions") as u64, "boundary condition"),
+            plural(count("boundary_conditions") as u64, crate::words::ts("boundary condition")),
             plural(count("loads") as u64, "load")
         ),
         "geometry.features" => {
             let bodies = v["bodies"].as_array().map(Vec::as_slice).unwrap_or_default();
             let n: usize = bodies.iter().map(|b| b["features"].as_array().map_or(0, Vec::len)).sum();
-            format!(
+            crate::words::wfmt!(
                 "{} building {}",
                 plural(n as u64, "feature"),
-                if bodies.len() == 1 { "1 body".to_string() } else { format!("{} bodies", bodies.len()) }
+                if bodies.len() == 1 { crate::words::ts("1 body").to_string() } else { crate::words::wfmt!("{} bodies", bodies.len()) }
             )
         }
         "geometry.bodies" => match v.as_array().map(Vec::len) {
-            Some(0) => "no bodies (open a design first)".to_string(),
+            Some(0) => crate::words::ts("no bodies (open a design first)").to_string(),
             Some(n) => plural(n as u64, "body").replace("bodys", "bodies"),
             None => scalars(v),
         },
         "model.info" => {
             let elements: u64 = v["elements"].as_object().into_iter().flatten().filter_map(|(_, n)| n.as_u64()).sum();
-            format!(
+            crate::words::wfmt!(
                 "{}, {}, units {}",
                 plural(v["nodes"].as_u64().unwrap_or(0), "node"),
                 plural(elements, "element"),
@@ -95,10 +99,14 @@ pub fn summary_in(command: &str, v: &Value, units: Option<&DisplaySystem>) -> St
             )
         }
         "interaction.contact.find" => {
-            format!("{} among {}", plural(count("touching") as u64, "touching pair"), plural(v["parts"].as_u64().unwrap_or(0), "part"))
+            crate::words::wfmt!(
+                "{} among {}",
+                plural(count("touching") as u64, crate::words::ts("touching pair")),
+                plural(v["parts"].as_u64().unwrap_or(0), "part")
+            )
         }
         "results.reactions" => match serde_json::from_value::<Vec<f64>>(v["total"]["force"].clone()) {
-            Ok(f) => format!("total reaction force ({})", with_unit(components(&f, 0.0), unit(Quantity::Force, units).as_deref())),
+            Ok(f) => crate::words::wfmt!("total reaction force ({})", with_unit(components(&f, 0.0), unit(Quantity::Force, units).as_deref())),
             Err(_) => scalars(v),
         },
         _ => scalars(v),
@@ -114,17 +122,17 @@ pub fn sentence(command: &str, v: &Value) -> Option<String> {
     match command {
         "file.save" | "file.save_as" => {
             let results = v["contents"].as_array().into_iter().flatten().filter_map(Value::as_str).any(|c| c.starts_with("the results of"));
-            Some(format!("Saved {}{}", file()?, if results { " (with results)" } else { "" }))
+            Some(crate::words::wfmt!("Saved {}{}", file()?, if results { crate::words::ts(" (with results)") } else { "" }))
         }
         "deck.write" => {
             let format = v["format"].as_str()?;
             let entry = fieldcraft_engine::catalogue::find(&format!("deck.write.{format}"));
-            let name = entry.map_or(format, |c| c.label.trim_end_matches(" Deck"));
+            let name = entry.map_or(format, |c| c.label.trim_end_matches(crate::words::ts(" Deck")));
             let units = v["units"].as_str().map(|u| format!(", {u}")).unwrap_or_default();
-            Some(format!("Wrote {} ({name}{units})", file()?))
+            Some(crate::words::wfmt!("Wrote {} ({name}{units})", file()?))
         }
-        "edit.undo" => v["undone"].as_str().map(|c| format!("Undid {}", crate::command_label(c))),
-        "edit.redo" => v["redone"].as_str().map(|c| format!("Redid {}", crate::command_label(c))),
+        "edit.undo" => v["undone"].as_str().map(|c| crate::words::wfmt!("Undid {}", crate::command_label(c))),
+        "edit.redo" => v["redone"].as_str().map(|c| crate::words::wfmt!("Redid {}", crate::command_label(c))),
         _ => None,
     }
 }
@@ -134,16 +142,16 @@ pub fn sentence(command: &str, v: &Value) -> Option<String> {
 /// load Push". Commands without a sentence of their own say "<label> done".
 pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
     let view = v.get("view").filter(|x| x.is_object());
-    let step = view.and_then(|x| x["step"].as_str()).unwrap_or("the step");
+    let step = view.and_then(|x| x["step"].as_str()).unwrap_or(crate::words::ts("the step"));
     let line = match command {
-        "results.deformed" if view.is_some_and(|x| x["deformed"] == false) => Some(format!("Showing {step} undeformed")),
+        "results.deformed" if view.is_some_and(|x| x["deformed"] == false) => Some(crate::words::wfmt!("Showing {step} undeformed")),
         "results.deformed" => {
             let scale = view.and_then(|x| x["scale"].as_f64()).map(|f| format!(" ×{}", crate::describe::quantity(f))).unwrap_or_default();
-            Some(format!("Showing {step} deformed{scale}"))
+            Some(crate::words::wfmt!("Showing {step} deformed{scale}"))
         }
         "results.contour" => Some(match v.pointer("/contour/label").and_then(Value::as_str) {
-            Some(field) => format!("Showing {field} on {step}"),
-            None => format!("Contours off on {step}"),
+            Some(field) => crate::words::wfmt!("Showing {field} on {step}"),
+            None => crate::words::wfmt!("Contours off on {step}"),
         }),
         "results.modes" => {
             let mode = view.and_then(|x| x["mode"].as_u64()).unwrap_or(1);
@@ -153,40 +161,52 @@ pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
                 .and_then(|m| m.iter().find(|m| m["mode"].as_u64() == Some(mode)))
                 .and_then(|m| m["frequency"].as_f64());
             Some(match hz {
-                Some(hz) => format!("Mode {mode}: {} Hz", crate::describe::quantity(hz)),
-                None => format!("Showing mode {mode} of {step}"),
+                Some(hz) => crate::words::wfmt!("Mode {mode}: {} Hz", crate::describe::quantity(hz)),
+                None => crate::words::wfmt!("Showing mode {mode} of {step}"),
             })
         }
-        "results.animate" => Some(if view.is_some_and(|x| x["animate"] == true) { "Animating" } else { "Animation stopped" }.to_string()),
+        "results.animate" => Some(
+            if view.is_some_and(|x| x["animate"] == true) { crate::words::ts("Animating") } else { crate::words::ts("Animation stopped") }
+                .to_string(),
+        ),
         "results.frame" => Some(match view.and_then(|x| x["frame"].as_u64()) {
-            Some(f) => format!("Showing {step} frame {f}"),
-            None => format!("Showing {step}, last frame"),
+            Some(f) => crate::words::wfmt!("Showing {step} frame {f}"),
+            None => crate::words::wfmt!("Showing {step}, last frame"),
         }),
         "results.slice" => Some(match (v["slice"]["axis"].as_str(), v["slice"]["position"].as_f64()) {
             (Some(axis), Some(at)) => {
-                let field = v.pointer("/contour/label").and_then(Value::as_str).unwrap_or("The flow");
-                format!("{field} on a slice at {axis} = {}", crate::describe::quantity(at))
+                let field = v.pointer("/contour/label").and_then(Value::as_str).unwrap_or(crate::words::ts("The flow"));
+                crate::words::wfmt!("{field} on a slice at {axis} = {}", crate::describe::quantity(at))
             }
-            _ => format!("Slice off on {step}"),
+            _ => crate::words::wfmt!("Slice off on {step}"),
         }),
-        "results.surface" => Some(if v["surface"] == true { "Obstacles coloured by the flow" } else { "Obstacles in their own colours" }.to_string()),
+        "results.surface" => Some(
+            if v["surface"] == true {
+                crate::words::ts("Obstacles coloured by the flow")
+            } else {
+                crate::words::ts("Obstacles in their own colours")
+            }
+            .to_string(),
+        ),
         "results.streamlines" => Some(match v.pointer("/traced/streamlines").and_then(Value::as_u64) {
-            Some(n) => format!("Traced {}", plural(n, "streamline")),
-            None => "Streamlines off".to_string(),
+            Some(n) => crate::words::wfmt!("Traced {}", plural(n, "streamline")),
+            None => crate::words::ts("Streamlines off").to_string(),
         }),
-        "results.clear" => Some("Back to the model".to_string()),
+        "results.clear" => Some(crate::words::ts("Back to the model").to_string()),
         "results.xy" => {
             let points = v.get("points").and_then(Value::as_u64).unwrap_or(0);
-            let what = v.pointer("/y/label").and_then(Value::as_str).unwrap_or("the series");
-            Some(format!("Plotted {what}: {}", plural(points, "point")))
+            let what = v.pointer("/y/label").and_then(Value::as_str).unwrap_or(crate::words::ts("the series"));
+            Some(crate::words::wfmt!("Plotted {what}: {}", plural(points, "point")))
         }
         "file.sample" => {
             let label = v.get("sample").and_then(Value::as_str).and_then(fieldcraft_engine::sample::find).map(|s| s.label);
-            label.map(|l| format!("Opened the {l} sample"))
+            label.map(|l| crate::words::wfmt!("Opened the {l} sample"))
         }
-        "solve.run" => v.get("steps").and_then(Value::as_array).map(|s| format!("Solved {}", plural(s.len() as u64, "step"))),
+        "solve.run" => v.get("steps").and_then(Value::as_array).map(|s| crate::words::wfmt!("Solved {}", plural(s.len() as u64, "step"))),
         "edit.undo" | "edit.redo" => sentence(command, v),
-        c if c.starts_with("solve.") => Some(format!("Solved {step}", step = params["step"].as_str().unwrap_or("the step"))),
+        c if c.starts_with("solve.") => {
+            Some(crate::words::wfmt!("Solved {step}", step = params["step"].as_str().unwrap_or(crate::words::ts("the step"))))
+        }
         _ => None,
     };
     if let Some(line) = line {
@@ -200,13 +220,13 @@ pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
     match (def, name) {
         (Some((kind, verb)), Some(name)) => {
             let did = match verb {
-                "create" => "Added",
-                "edit" => "Changed",
-                _ => "Deleted",
+                "create" => crate::words::ts("Added"),
+                "edit" => crate::words::ts("Changed"),
+                _ => crate::words::ts("Deleted"),
             };
             format!("{did} {} {name}", kind.label().to_lowercase())
         }
-        _ => format!("{label} done"),
+        _ => crate::words::wfmt!("{label} done"),
     }
 }
 
@@ -296,8 +316,8 @@ pub fn show(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens) {
     // longest key.
     kit::scope(ui, |ui| {
         ui.add_space(4.0);
-        if kit::button(ui, "Run again", kit::Button::Normal)
-            .backing_on_hover_text(format!("{} again, with the same parameters", reply.label))
+        if kit::button(ui, crate::words::ts("Run again"), kit::Button::Normal)
+            .backing_on_hover_text(crate::words::wfmt!("{} again, with the same parameters", reply.label))
             .clicked()
         {
             acts.push(Act::Rerun);
@@ -310,7 +330,7 @@ pub fn show(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens) {
             "deck.read" => {
                 kit::status_line(
                     ui,
-                    "Model data only. Analysis history was not imported; review unread keywords and warnings before solving.",
+                    crate::words::ts("Model data only. Analysis history was not imported; review unread keywords and warnings before solving."),
                     kit::StatusTone::Dim,
                 );
                 value(ui, t, egui::Id::unique("fc_deck_read"), &reply.value, 0);
@@ -399,23 +419,23 @@ fn geometry_unit(units: &DisplaySystem, q: fieldcraft_model::units::Quantity) ->
 
 fn defeature_list(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySystem, acts: &mut Vec<Act>) {
     use fieldcraft_model::units::Quantity as Q;
-    let name = v["name"].as_str().unwrap_or("Defeature").to_string();
+    let name = v["name"].as_str().unwrap_or(crate::words::ts("Defeature")).to_string();
     let body = v["body"].as_str().unwrap_or_default();
     let candidates = v["candidates"].as_array().map(Vec::as_slice).unwrap_or_default();
     let proposal: Vec<u64> = v["proposal"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
     let pending: Vec<u64> = candidates.iter().filter(|c| c["proposed"] == true && c["suppressed"] != true).filter_map(|c| c["id"].as_u64()).collect();
     if !proposal.is_empty() {
-        let button = kit::button(ui, format!("Defeature the {} proposed", pending.len()), kit::Button::Enabled(!pending.is_empty()));
-        if button.backing_on_hover_text(format!("Take them out with defeature {name}")).clicked() {
+        let button = kit::button(ui, crate::words::wfmt!("Defeature the {} proposed", pending.len()), kit::Button::Enabled(!pending.is_empty()));
+        if button.backing_on_hover_text(crate::words::wfmt!("Take them out with defeature {name}")).clicked() {
             acts.push(Act::Propose { name: name.clone(), features: pending });
         }
         ui.add_space(4.0);
     }
     let columns = [
-        kit::Column::new("In mesh", 0.0).min_content_width(kit::row_height()),
-        kit::Column::new("Feature", 2.0).flex(),
-        kit::Column::new("Kind", 1.0).flex(),
-        kit::Column::new("Size", 1.0).flex(),
+        kit::Column::new(crate::words::ts("In mesh"), 0.0).min_content_width(kit::row_height()),
+        kit::Column::new(crate::words::ts("Feature"), 2.0).flex(),
+        kit::Column::new(crate::words::ts("Kind"), 1.0).flex(),
+        kit::Column::new(crate::words::ts("Size"), 1.0).flex(),
     ];
     kit::table_custom(ui, "fc_defeature", &columns, "", |ui, table| {
         table.headers(ui, |_, _| false);
@@ -424,18 +444,22 @@ fn defeature_list(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySyste
             table.row(ui, &format!("F{id}"), false, |row| {
                 let mut on = c["suppressed"] != true;
                 let by = c["by"].as_str().unwrap_or(&name).to_string();
-                let hover = if on { format!("Switch off: defeature {name} takes it out") } else { format!("Switch on: defeature {by} keeps it") };
+                let hover = if on {
+                    crate::words::wfmt!("Switch off: defeature {name} takes it out")
+                } else {
+                    crate::words::wfmt!("Switch on: defeature {by} keeps it")
+                };
                 row.cell(|ui| {
                     if kit::checkbox(ui, "", &mut on).backing_on_hover_text(hover).changed() {
                         acts.push(Act::Defeature { name: if on { by } else { name.clone() }, feature: id, on });
                     }
                 });
                 // A proposed feature says so in words, not only in a colour.
-                let proposed = if c["proposed"] == true { " · proposed" } else { "" };
+                let proposed = if c["proposed"] == true { crate::words::ts(" · proposed") } else { "" };
                 let label = format!("F{id} {}{proposed}", c["name"].as_str().unwrap_or_default());
                 row.cell(|ui| match c["faces"].as_array().and_then(|f| f.first()).and_then(Value::as_str).filter(|_| on) {
                     Some(face) => {
-                        if kit::text_button(ui, &label, true).backing_on_hover_text("Pick its face in the viewport").clicked() {
+                        if kit::text_button(ui, &label, true).backing_on_hover_text(crate::words::ts("Pick its face in the viewport")).clicked() {
                             let entity = fieldcraft_model::Entity::Face(face.to_string());
                             acts.push(Act::Pick(fieldcraft_model::GeometryRef { body: body.to_string(), entity }));
                         }
@@ -445,7 +469,7 @@ fn defeature_list(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySyste
                     }
                 });
                 let method = match c["method"].as_str() {
-                    Some("virtual") => " (virtual)",
+                    Some("virtual") => crate::words::ts(" (virtual)"),
                     _ => "",
                 };
                 row.cell(|ui| kit::text(ui, &format!("{}{method}", c["category"].as_str().unwrap_or_default()), kit::Text::Cell));
@@ -525,7 +549,11 @@ fn feature_graph(
                 });
                 let rect = inner.response.rect;
                 let resp = ui.interact(rect, id.with("row"), egui::Sense::click());
-                let hover_text = if f.faces.is_empty() { "Show its details" } else { "Select the faces it made; show its details" };
+                let hover_text = if f.faces.is_empty() {
+                    crate::words::ts("Show its details")
+                } else {
+                    crate::words::ts("Select the faces it made; show its details")
+                };
                 let resp = resp.backing_on_hover_text(hover_text);
                 if resp.hovered() {
                     ui.painter().set(bg, egui::Shape::rect_filled(rect, radius, t.hover));
@@ -557,13 +585,13 @@ fn subject_definition(app: &ModelApp, subject: &str) -> Option<(Def, String)> {
 /// Where a whole-model diagnostic is fixed: a button's text, tooltip and what it does.
 fn model_fix(message: &str) -> Option<(&'static str, Act)> {
     if message.contains("mesh has no elements") {
-        Some(("Mesh…", Act::Tab(Tab::Mesh)))
+        Some((crate::words::ts("Mesh…"), Act::Tab(Tab::Mesh)))
     } else if message.contains("no unit system") {
-        Some(("Units…", Act::Start("model.units")))
+        Some((crate::words::ts("Units…"), Act::Start("model.units")))
     } else if message.contains("no analysis step") {
-        Some(("Step…", Act::Start("model.step.create")))
+        Some((crate::words::ts("Step…"), Act::Start("model.step.create")))
     } else if message.contains("have no section") {
-        Some(("Section…", Act::Start("model.section.create")))
+        Some((crate::words::ts("Section…"), Act::Start("model.section.create")))
     } else {
         None
     }
@@ -574,17 +602,24 @@ fn model_fix(message: &str) -> Option<(&'static str, Act)> {
 fn diagnostics(app: &ModelApp, ui: &mut egui::Ui, v: &Value, acts: &mut Vec<Act>) {
     let list = v["diagnostics"].as_array().map(Vec::as_slice).unwrap_or_default();
     if list.is_empty() {
-        kit::check_status_line(ui, "fc_check:ready", "The model is ready to solve.", kit::CheckStatus::Ok);
+        kit::check_status_line(ui, "fc_check:ready", crate::words::ts("The model is ready to solve."), kit::CheckStatus::Ok);
         return;
     }
     for (i, d) in list.iter().enumerate() {
         let error = d["severity"] == "error";
         let subject = d["subject"].as_str().unwrap_or_default();
         let message = d["message"].as_str().unwrap_or_default();
-        let (status, tip) = if error { (kit::CheckStatus::Error, "Error: blocks solving") } else { (kit::CheckStatus::Warning, "Warning") };
+        let (status, tip) = if error {
+            (kit::CheckStatus::Error, crate::words::ts("Error: blocks solving"))
+        } else {
+            (kit::CheckStatus::Warning, crate::words::ts("Warning"))
+        };
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             if let Some((kind, name)) = subject_definition(app, subject) {
-                if kit::button(ui, "Show", kit::Button::Small).backing_on_hover_text(format!("Select {subject} to see and edit it")).clicked() {
+                if kit::button(ui, crate::words::ts("Show"), kit::Button::Small)
+                    .backing_on_hover_text(crate::words::wfmt!("Select {subject} to see and edit it"))
+                    .clicked()
+                {
                     acts.push(Act::Select(kind, name));
                 }
             } else if subject == "model"
@@ -629,17 +664,21 @@ fn quality_rows(v: &Value, units: &DisplaySystem) -> Vec<(&'static str, String, 
     let n = |k: &str| v.get(k).and_then(Value::as_u64).unwrap_or(0);
     let (invalid, undetermined) =
         (v.pointer("/invalid/count").and_then(Value::as_u64).unwrap_or(0), v.pointer("/undetermined/count").and_then(Value::as_u64).unwrap_or(0));
-    let mut rows = vec![("Elements", count(n("measured")), false), ("Valid", count(n("valid")), false), ("Invalid", count(invalid), invalid > 0)];
+    let mut rows = vec![
+        (crate::words::ts("Elements"), count(n("measured")), false),
+        (crate::words::ts("Valid"), count(n("valid")), false),
+        (crate::words::ts("Invalid"), count(invalid), invalid > 0),
+    ];
     if undetermined > 0 {
-        rows.push(("Undetermined", count(undetermined), false));
+        rows.push((crate::words::ts("Undetermined"), count(undetermined), false));
     }
     let measure = |x: f64, q: Q| format!("{} {}", crate::describe::quantity(sig(x)), units.symbol(q));
     if let Some(vol) = v.get("volume").and_then(Value::as_f64).filter(|x| *x > 0.0) {
-        rows.push(("Volume", measure(vol, Q::Volume), false));
+        rows.push((crate::words::ts("Volume"), measure(vol, Q::Volume), false));
     }
     // A surface mesh's area; a solid mesh has none to show.
     if let Some(area) = v.get("area").and_then(Value::as_f64).filter(|x| *x > 0.0) {
-        rows.push(("Area", measure(area, Q::Area), false));
+        rows.push((crate::words::ts("Area"), measure(area, Q::Area), false));
     }
     rows
 }
@@ -663,26 +702,30 @@ fn quality(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySystem, acts
     for (key, what) in [("invalid", "invalid"), ("undetermined", "undetermined")] {
         let l = labels(key);
         if !l.is_empty()
-            && kit::button(ui, format!("Select the {} {what} elements", count(l.len() as u64)), kit::Button::Normal)
-                .backing_on_hover_text("Select and frame them in the viewport")
+            && kit::button(ui, crate::words::wfmt!("Select the {} {what} elements", count(l.len() as u64)), kit::Button::Normal)
+                .backing_on_hover_text(crate::words::ts("Select and frame them in the viewport"))
                 .clicked()
         {
             acts.push(Act::Elements(l));
         }
     }
     if let Some(worst) = v.pointer("/metrics/scaled_jacobian/worst").and_then(Value::as_u64).and_then(|w| u32::try_from(w).ok())
-        && kit::button(ui, "Relax around worst element", kit::Button::Normal)
-            .backing_on_hover_text("Open Relax Nodes with its sphere round the element of smallest scaled Jacobian; preview, then OK")
+        && kit::button(ui, crate::words::ts("Relax around worst element"), kit::Button::Normal)
+            .backing_on_hover_text(crate::words::ts(
+                "Open Relax Nodes with its sphere round the element of smallest scaled Jacobian; preview, then OK",
+            ))
             .clicked()
     {
         acts.push(Act::Relax(worst));
     }
     for (key, label, low_bad) in METRICS {
         let Some(m) = v.pointer(&format!("/metrics/{key}")).filter(|m| m.is_object()) else { continue };
+        // The const keeps the English label; the table reads it in the thread's language.
+        let label = crate::words::ts(label);
         let f = |k: &str| m.get(k).and_then(Value::as_f64);
         ui.add_space(6.0);
         kit::text(ui, label, kit::Text::Heading("fc_quality_metric"));
-        let range = format!(
+        let range = crate::words::wfmt!(
             "min {} · mean {} · max {}",
             f("min").map_or("—".into(), number),
             f("mean").map_or("—".into(), number),
@@ -696,8 +739,8 @@ fn quality(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySystem, acts
         }
         if let Some(worst) = m.get("worst").and_then(Value::as_u64).and_then(|w| u32::try_from(w).ok()) {
             let value = if low_bad { f("min") } else { f("max") };
-            let text = format!("Worst: element {worst}{}", value.map(|x| format!(" ({})", number(x))).unwrap_or_default());
-            if kit::text_button(ui, &text, true).backing_on_hover_text("Select and frame it in the viewport").clicked() {
+            let text = crate::words::wfmt!("Worst: element {worst}{}", value.map(|x| format!(" ({})", number(x))).unwrap_or_default());
+            if kit::text_button(ui, &text, true).backing_on_hover_text(crate::words::ts("Select and frame it in the viewport")).clicked() {
                 acts.push(Act::Elements(vec![worst]));
             }
         }
@@ -706,7 +749,7 @@ fn quality(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySystem, acts
         ui.add_space(6.0);
         let text: Vec<String> =
             skipped.iter().map(|(k, n)| format!("{k}: {}", n.as_u64().map_or_else(|| crate::context::value_text(n), count))).collect();
-        kit::status_line(ui, &format!("Not measured: {}", text.join(", ")), kit::StatusTone::Dim);
+        kit::status_line(ui, &crate::words::wfmt!("Not measured: {}", text.join(", ")), kit::StatusTone::Dim);
     }
 }
 
@@ -760,28 +803,38 @@ fn bodies(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: &DisplaySystem, acts:
             .zip(corner(1))
             .map(|(lo, hi)| format!("{} × {} × {} {length}", q(sig(hi[0] - lo[0])), q(sig(hi[1] - lo[1])), q(sig(hi[2] - lo[2]))));
         let id = egui::Id::unique(("fc_reply_body", i));
-        if kit::text_button(ui, name, true).backing_on_hover_text("Pick this body in the viewport").clicked() {
+        if kit::text_button(ui, name, true).backing_on_hover_text(crate::words::ts("Pick this body in the viewport")).clicked() {
             acts.push(Act::Pick(pick(name, fieldcraft_model::Entity::Body)));
         }
         let row = |ui: &mut egui::Ui, k: &str, text: String| {
             kit::row(ui, k, |ui| kit::text(ui, &text, kit::Text::Cell));
         };
         if let Some(v) = b["volume"].as_f64() {
-            row(ui, "Volume", format!("{} {volume}", q(sig(v))));
+            row(ui, crate::words::ts("Volume"), format!("{} {volume}", q(sig(v))));
         }
         if let Some(a) = b["area"].as_f64() {
-            row(ui, "Area", format!("{} {area}", q(sig(a))));
+            row(ui, crate::words::ts("Area"), format!("{} {area}", q(sig(a))));
         }
-        row(ui, "Faces, edges", format!("{}, {}", faces.len(), edges.len()));
+        row(ui, crate::words::ts("Faces, edges"), format!("{}, {}", faces.len(), edges.len()));
         if let Some(size) = size {
-            row(ui, "Size", size);
+            row(ui, crate::words::ts("Size"), size);
         }
-        body_list(ui, t, id.with("faces"), "Faces", faces, &|f| (f["name"].as_str().unwrap_or_default().to_string(), None), name, length, acts);
+        body_list(
+            ui,
+            t,
+            id.with("faces"),
+            crate::words::ts("Faces"),
+            faces,
+            &|f| (f["name"].as_str().unwrap_or_default().to_string(), None),
+            name,
+            length,
+            acts,
+        );
         body_list(
             ui,
             t,
             id.with("edges"),
-            "Edges",
+            crate::words::ts("Edges"),
             edges,
             &|e| (e["name"].as_str().unwrap_or_default().to_string(), e["length"].as_f64()),
             name,
@@ -812,9 +865,12 @@ fn body_list(
         for item in items.iter().take(MAX_ENTITIES) {
             let (name, length) = read(item);
             ui.horizontal(|ui| {
-                if kit::text_button(ui, &name, true).backing_on_hover_text("Pick it in the viewport").clicked() {
-                    let entity =
-                        if title == "Edges" { fieldcraft_model::Entity::Edge(name.clone()) } else { fieldcraft_model::Entity::Face(name.clone()) };
+                if kit::text_button(ui, &name, true).backing_on_hover_text(crate::words::ts("Pick it in the viewport")).clicked() {
+                    let entity = if title == crate::words::ts("Edges") {
+                        fieldcraft_model::Entity::Edge(name.clone())
+                    } else {
+                        fieldcraft_model::Entity::Face(name.clone())
+                    };
                     acts.push(Act::Pick(fieldcraft_model::GeometryRef { body: body.to_string(), entity }));
                 }
                 if let Some(l) = length {
@@ -837,7 +893,7 @@ fn sig(v: f64) -> f64 {
 
 fn more_than(ui: &mut egui::Ui, t: &Tokens, n: usize, max: usize) {
     if n > max {
-        ui.label(RichText::new(format!("… {} more", n - max)).small().color(t.text_dim));
+        ui.label(RichText::new(crate::words::wfmt!("… {} more", n - max)).small().color(t.text_dim));
     }
 }
 
@@ -845,7 +901,7 @@ fn more_than(ui: &mut egui::Ui, t: &Tokens, n: usize, max: usize) {
 fn activity(ui: &mut egui::Ui, t: &Tokens, v: &Value) {
     let steps: Vec<&str> = v["steps"].as_array().into_iter().flatten().filter_map(|s| s["name"].as_str()).collect();
     if steps.is_empty() {
-        ui.label(RichText::new("No analysis steps yet: Steps › Step creates one.").color(t.text_dim));
+        ui.label(RichText::new(crate::words::ts("No analysis steps yet: Steps › Step creates one.")).color(t.text_dim));
         return;
     }
     let procedures: Vec<&str> = v["steps"].as_array().into_iter().flatten().map(|s| s["procedure"].as_str().unwrap_or_default()).collect();
@@ -857,7 +913,7 @@ fn activity(ui: &mut egui::Ui, t: &Tokens, v: &Value) {
             kit::text(ui, step, kit::Text::NameCell(true)).backing_on_hover_text(*procedure);
             true
         });
-        for (key, kind) in [("boundary_conditions", "BC"), ("loads", "Load")] {
+        for (key, kind) in [("boundary_conditions", "BC"), ("loads", crate::words::ts("Load"))] {
             for (name, active) in v[key].as_object().into_iter().flatten() {
                 table.row(ui, &format!("{key}:{name}"), false, |row| {
                     row.cell(|ui| kit::text(ui, name, kit::Text::NameCell(false)).backing_on_hover_text(kind));
@@ -865,9 +921,14 @@ fn activity(ui: &mut egui::Ui, t: &Tokens, v: &Value) {
                         let on = active.as_array().is_some_and(|a| a.iter().any(|x| x == *s));
                         row.cell(|ui| {
                             if on {
-                                kit::check_status_line(ui, &format!("fc_reply_activity:{name}:{s}"), "Active", kit::CheckStatus::Ok);
+                                kit::check_status_line(
+                                    ui,
+                                    &format!("fc_reply_activity:{name}:{s}"),
+                                    crate::words::ts("Active"),
+                                    kit::CheckStatus::Ok,
+                                );
                             } else {
-                                kit::text(ui, "—", kit::Text::Cell).backing_on_hover_text("Not active in this step");
+                                kit::text(ui, "—", kit::Text::Cell).backing_on_hover_text(crate::words::ts("Not active in this step"));
                             }
                         });
                     }
@@ -882,9 +943,9 @@ fn solve_line(v: &Value, units: Option<&DisplaySystem>) -> String {
     let mut parts = Vec::new();
     let peak = |key: &str| v.get(key).and_then(|p| p.get("value")).and_then(Value::as_f64);
     for (key, what, q) in [
-        ("max_displacement", "max |U|", Quantity::Length),
-        ("max_von_mises", "max Mises", Quantity::Pressure),
-        ("max_temperature", "max T", Quantity::Temperature),
+        ("max_displacement", crate::words::ts("max |U|"), Quantity::Length),
+        ("max_von_mises", crate::words::ts("max Mises"), Quantity::Pressure),
+        ("max_temperature", crate::words::ts("max T"), Quantity::Temperature),
     ] {
         if let Some(x) = peak(key) {
             parts.push(format!("{what} {}", with_unit(number(x), unit(q, units).as_deref())));
@@ -892,13 +953,13 @@ fn solve_line(v: &Value, units: Option<&DisplaySystem>) -> String {
     }
     if let Some(m) = v["modes"].as_array().and_then(|m| m.first()) {
         if let Some(f) = m["frequency"].as_f64() {
-            parts.push(format!("mode 1 at {} Hz", number(f)));
+            parts.push(crate::words::wfmt!("mode 1 at {} Hz", number(f)));
         } else if let Some(l) = m["load_factor"].as_f64() {
-            parts.push(format!("first load factor {}", number(l)));
+            parts.push(crate::words::wfmt!("first load factor {}", number(l)));
         }
     }
     if let Some(n) = v["dofs"].as_u64() {
-        parts.push(format!("{} DOFs", count(n)));
+        parts.push(crate::words::wfmt!("{} DOFs", count(n)));
     }
     parts.join(", ")
 }
@@ -920,24 +981,24 @@ fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&Displa
     let Some(m) = v.as_object() else { return value(ui, t, egui::Id::unique("fc_reply_solve"), v, 0) };
     let steady = m.get("frames").and_then(Value::as_u64).is_some_and(|n| n <= 1);
     let rows: [(&str, &str, Row); 18] = [
-        ("step", "Step", Row::Text),
-        ("max_displacement", "Max |U|", Row::Peak(Quantity::Length)),
-        ("max_von_mises", "Max Mises", Row::Peak(Quantity::Pressure)),
-        ("max_temperature", "Max T", Row::Peak(Quantity::Temperature)),
-        ("min_temperature", "Min T", Row::Peak(Quantity::Temperature)),
-        ("max_plastic_strain", "Max plastic strain", Row::Peak(Quantity::Dimensionless)),
-        ("applied_total", "Applied force", Row::Vector(Quantity::Force)),
-        ("reaction_total", "Reaction force", Row::Vector(Quantity::Force)),
-        ("heat_supplied", "Heat flow through", Row::Number(Quantity::Power)),
-        ("total_mass", "Total mass", Row::Number(Quantity::Mass)),
-        ("load_factor", "Load factor", Row::Number(Quantity::Dimensionless)),
-        ("time", "Time reached", Row::Number(Quantity::Time)),
-        ("end_time", "End time", Row::Number(Quantity::Time)),
-        ("completed", "Completed", Row::Text),
-        ("energy_balance", "Energy balance error", Row::Number(Quantity::Dimensionless)),
-        ("dofs", "Degrees of freedom", Row::Count),
-        ("elements", "Elements", Row::Count),
-        ("frames", "Frames", Row::Count),
+        ("step", crate::words::ts("Step"), Row::Text),
+        ("max_displacement", crate::words::ts("Max |U|"), Row::Peak(Quantity::Length)),
+        ("max_von_mises", crate::words::ts("Max Mises"), Row::Peak(Quantity::Pressure)),
+        ("max_temperature", crate::words::ts("Max T"), Row::Peak(Quantity::Temperature)),
+        ("min_temperature", crate::words::ts("Min T"), Row::Peak(Quantity::Temperature)),
+        ("max_plastic_strain", crate::words::ts("Max plastic strain"), Row::Peak(Quantity::Dimensionless)),
+        ("applied_total", crate::words::ts("Applied force"), Row::Vector(Quantity::Force)),
+        ("reaction_total", crate::words::ts("Reaction force"), Row::Vector(Quantity::Force)),
+        ("heat_supplied", crate::words::ts("Heat flow through"), Row::Number(Quantity::Power)),
+        ("total_mass", crate::words::ts("Total mass"), Row::Number(Quantity::Mass)),
+        ("load_factor", crate::words::ts("Load factor"), Row::Number(Quantity::Dimensionless)),
+        ("time", crate::words::ts("Time reached"), Row::Number(Quantity::Time)),
+        ("end_time", crate::words::ts("End time"), Row::Number(Quantity::Time)),
+        ("completed", crate::words::ts("Completed"), Row::Text),
+        ("energy_balance", crate::words::ts("Energy balance error"), Row::Number(Quantity::Dimensionless)),
+        ("dofs", crate::words::ts("Degrees of freedom"), Row::Count),
+        ("elements", crate::words::ts("Elements"), Row::Count),
+        ("frames", crate::words::ts("Frames"), Row::Count),
     ];
     let mut shown: Vec<&str> = Vec::new();
     {
@@ -951,7 +1012,7 @@ fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&Displa
             let text = match row {
                 Row::Number(q) => x.as_f64().map(|f| with_unit(number(f), unit(*q, units).as_deref())),
                 Row::Peak(q) => x["value"].as_f64().map(|f| {
-                    let at = x["node"].as_u64().map_or_else(String::new, |n| format!(" at node {n}"));
+                    let at = x["node"].as_u64().map_or_else(String::new, |n| crate::words::wfmt!(" at node {n}"));
                     format!("{}{at}", with_unit(number(f), unit(*q, units).as_deref()))
                 }),
                 Row::Vector(q) => {
@@ -969,7 +1030,7 @@ fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&Displa
     shown.push("heat_removed");
     if let Some(modes) = m.get("modes").and_then(Value::as_array).filter(|a| !a.is_empty()) {
         shown.push("modes");
-        kit::section_count(ui, "fc_reply_solve_modes", "Modes", true, Some(modes.len()), |ui| {
+        kit::section_count(ui, "fc_reply_solve_modes", crate::words::ts("Modes"), true, Some(modes.len()), |ui| {
             let buckling = modes.iter().any(|x| x.get("load_factor").is_some());
             let rows: Vec<Vec<String>> = modes
                 .iter()
@@ -981,7 +1042,12 @@ fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&Displa
                     ]
                 })
                 .collect();
-            text_table(ui, "fc_reply_solve_modes", &["Mode", if buckling { "Load factor" } else { "Frequency [Hz]" }], &rows);
+            text_table(
+                ui,
+                "fc_reply_solve_modes",
+                &[crate::words::ts("Mode"), if buckling { crate::words::ts("Load factor") } else { crate::words::ts("Frequency [Hz]") }],
+                &rows,
+            );
             more(ui, t, modes.len());
         });
     }
@@ -999,7 +1065,7 @@ fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&Displa
         .map(|(k, x)| (k.clone(), x.clone()))
         .collect();
     if !rest.is_empty() {
-        kit::section(ui, "fc_reply_solve_details", "Details", false, |ui| {
+        kit::section(ui, "fc_reply_solve_details", crate::words::ts("Details"), false, |ui| {
             let rest = Value::Object(rest.into_iter().map(|(k, x)| (k, x.as_u64().map_or(x.clone(), |n| Value::String(count(n))))).collect());
             value(ui, t, egui::Id::unique("fc_reply_solve_details"), &rest, 1);
         });
@@ -1089,7 +1155,7 @@ pub(crate) fn text_table(ui: &mut egui::Ui, id: &str, headings: &[&str], rows: &
 
 fn more(ui: &mut egui::Ui, t: &Tokens, n: usize) {
     if n > MAX_ROWS {
-        ui.label(RichText::new(format!("… {} more", n - MAX_ROWS)).small().color(t.text_dim));
+        ui.label(RichText::new(crate::words::wfmt!("… {} more", n - MAX_ROWS)).small().color(t.text_dim));
     }
 }
 

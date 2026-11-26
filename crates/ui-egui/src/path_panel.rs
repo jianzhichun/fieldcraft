@@ -109,11 +109,11 @@ impl ModelApp {
             .or_else(|| self.session.solved_steps().next().map(str::to_owned));
         let Some(step) = step else { return };
         let Some(result) = self.session.result(&step).cloned() else {
-            self.set_status("Solve the step again before plotting a path", true);
+            self.set_status(crate::words::ts("Solve the step again before plotting a path"), true);
             return;
         };
         if matches!(result.kind(), Kind::Fluid(_)) {
-            self.set_status("Path plots currently use solid nodal fields", true);
+            self.set_status(crate::words::ts("Path plots currently use solid nodal fields"), true);
             return;
         }
         let visible = shown.filter(|v| v.step == step);
@@ -166,7 +166,7 @@ impl ModelApp {
         };
         if let Some(editor) = self.path_editor.as_mut() {
             if editor.points.len() >= fieldcraft_engine::path::MAX_POINTS {
-                self.set_status("Path already has 1000 points", true);
+                self.set_status(crate::words::ts("Path already has 1000 points"), true);
                 return true;
             }
             editor.points.push(point);
@@ -206,7 +206,7 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
     let Some(mut editor) = app.path_editor.take() else { return };
     let busy = app.busy().is_some();
     let mut close = false;
-    kit::panel::header(ui, "results.path", "Path Plot", || close = true);
+    kit::panel::header(ui, "results.path", crate::words::ts("Path Plot"), || close = true);
     if close {
         if app.loading.as_ref().is_some_and(|l| l.command == "results.path") {
             app.cancel_loading();
@@ -217,7 +217,7 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
     let mut export = false;
     ui.add_enabled_ui(!busy, |ui| {
         let current = editor.step.clone();
-        kit::row(ui, "Step", |ui| {
+        kit::row(ui, crate::words::ts("Step"), |ui| {
             kit::bounded_dropdown_menu(ui, "fc_path_step", &current, ui.available_width(), |ui| {
                 for step in app.session.solved_steps() {
                     if ui.selectable_label(editor.step == step, step).clicked() {
@@ -229,7 +229,7 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
             })
         });
         let Some(result) = app.session.result(&editor.step) else {
-            kit::status_line(ui, "Result is stale; solve it again", kit::StatusTone::Error);
+            kit::status_line(ui, crate::words::ts("Result is stale; solve it again"), kit::StatusTone::Error);
             return;
         };
         let available = fields(result);
@@ -238,17 +238,17 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
         }
         let mut field = available.iter().position(|f| *f == editor.field).unwrap_or(0);
         let labels: Vec<&str> = available.iter().map(|f| f.label()).collect();
-        kit::choice_row(ui, "Field", "fc_path_field", &mut field, &labels);
+        kit::choice_row(ui, crate::words::ts("Field"), "fc_path_field", &mut field, &labels);
         if let Some(f) = available.get(field) {
             editor.field = *f;
         }
         let length = app.session.units().symbol(Quantity::Length).to_string();
-        kit::status_line(ui, &format!("Reference coordinates [{length}]: x, y, z"), kit::StatusTone::Dim);
+        kit::status_line(ui, &crate::words::wfmt!("Reference coordinates [{length}]: x, y, z"), kit::StatusTone::Dim);
         let mut remove = None;
         let rows = kit::table_row_height() * editor.points.len().min(VISIBLE_POINTS) as f32;
         egui::ScrollArea::vertical().id_salt("fc_path_rows").max_height(rows).show(ui, |ui| {
             for (i, point) in editor.points.iter_mut().enumerate() {
-                kit::row(ui, &format!("Point {}", i + 1), |ui| {
+                kit::row(ui, &crate::words::wfmt!("Point {}", i + 1), |ui| {
                     let remove_width = kit::row_height() + ui.spacing().item_spacing.x;
                     let mut shown: [f64; 3] = std::array::from_fn(|k| app.session.units().express(Quantity::Length, point[k]).unwrap_or(f64::NAN));
                     let fields = ui
@@ -265,7 +265,7 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
                             point[k] = stored;
                         }
                     }
-                    if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text("Remove point").clicked() {
+                    if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text(crate::words::ts("Remove point")).clicked() {
                         remove = Some(i);
                     }
                 });
@@ -275,53 +275,58 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
             editor.points.remove(i);
         }
         ui.horizontal(|ui| {
-            if kit::button(ui, "Add point", kit::Button::Enabled(editor.points.len() < fieldcraft_engine::path::MAX_POINTS)).clicked() {
+            if kit::button(ui, crate::words::ts("Add point"), kit::Button::Enabled(editor.points.len() < fieldcraft_engine::path::MAX_POINTS))
+                .clicked()
+            {
                 editor.points.push(editor.points.last().copied().unwrap_or([0.0; 3]));
             }
-            kit::checkbox(ui, "Pick surface points", &mut editor.picking)
-                .backing_on_hover_text("Click the visible mesh to add reference-coordinate points, including on deformed and curved element faces.");
+            kit::checkbox(ui, crate::words::ts("Pick surface points"), &mut editor.picking).backing_on_hover_text(crate::words::ts(
+                "Click the visible mesh to add reference-coordinate points, including on deformed and curved element faces.",
+            ));
         });
         if editor.picking && editor.step != view.view.step {
-            kit::status_line(ui, "Show this step before picking its surface", kit::StatusTone::Dim);
+            kit::status_line(ui, crate::words::ts("Show this step before picking its surface"), kit::StatusTone::Dim);
         }
-        kit::row(ui, "Samples", |ui| kit::whole_number_field(ui, &mut editor.samples, 2..=fieldcraft_engine::path::MAX_SAMPLES, ""));
+        kit::row(ui, crate::words::ts("Samples"), |ui| {
+            kit::whole_number_field(ui, &mut editor.samples, 2..=fieldcraft_engine::path::MAX_SAMPLES, "")
+        });
         match result.kind() {
             Kind::Frequency(f) => {
                 let mode = editor.mode.get_or_insert(1);
-                kit::row(ui, "Mode", |ui| kit::whole_number_field(ui, mode, 1..=f.modes.len().max(1), ""));
+                kit::row(ui, crate::words::ts("Mode"), |ui| kit::whole_number_field(ui, mode, 1..=f.modes.len().max(1), ""));
             }
             _ => {
                 let frames = stored_frames(result, editor.field);
                 if frames > 0 {
                     let mut chosen = editor.frame.is_some();
-                    kit::checkbox(ui, "Stored frame (otherwise final)", &mut chosen);
+                    kit::checkbox(ui, crate::words::ts("Stored frame (otherwise final)"), &mut chosen);
                     if chosen {
                         let frame = editor.frame.get_or_insert(frames.saturating_sub(1));
-                        kit::row(ui, "Frame", |ui| kit::whole_number_field(ui, frame, 0..=frames.saturating_sub(1), ""));
+                        kit::row(ui, crate::words::ts("Frame"), |ui| kit::whole_number_field(ui, frame, 0..=frames.saturating_sub(1), ""));
                     } else {
                         editor.frame = None;
                     }
                 } else {
                     editor.frame = None;
-                    kit::status_line(ui, "Final state", kit::StatusTone::Dim);
+                    kit::status_line(ui, crate::words::ts("Final state"), kit::StatusTone::Dim);
                 }
             }
         }
         ui.horizontal(|ui| {
-            sample = kit::button(ui, "Sample path", kit::Button::Enabled(editor.points.len() >= 2)).clicked();
-            export = kit::button(ui, "Export CSV…", kit::Button::Enabled(editor.points.len() >= 2)).clicked();
+            sample = kit::button(ui, crate::words::ts("Sample path"), kit::Button::Enabled(editor.points.len() >= 2)).clicked();
+            export = kit::button(ui, crate::words::ts("Export CSV…"), kit::Button::Enabled(editor.points.len() >= 2)).clicked();
         });
     });
     if let Some(plot) = app.session.path_plot.as_ref() {
         kit::divider(ui, "fc_path_plot");
-        let frame = plot.pick.frame.map_or_else(|| "final state".to_string(), |k| format!("frame {k}"));
-        let mode = plot.mode.map(|mode| format!("mode {mode}"));
+        let frame = plot.pick.frame.map_or_else(|| crate::words::ts("final state").to_string(), |k| crate::words::wfmt!("frame {k}"));
+        let mode = plot.mode.map(|mode| crate::words::wfmt!("mode {mode}"));
         let result = plot.result.upgrade();
         let title = result.as_ref().map_or_else(|| plot.field.label().to_owned(), |r| plot.field.title(r, app.session.units()));
         kit::text(ui, &format!("{} · {}", plot.step, mode.as_deref().unwrap_or(&frame)), kit::Text::Heading("fc_path_plot_step"));
         kit::status_line(ui, &title, kit::StatusTone::Dim);
         if !plot.current(&app.session) {
-            kit::status_line(ui, "Plotted result is stale; sample again after solving", kit::StatusTone::Error);
+            kit::status_line(ui, crate::words::ts("Plotted result is stale; sample again after solving"), kit::StatusTone::Error);
         } else if let Some(result) = result {
             let distance: Vec<_> =
                 plot.distance.iter().map(|v| fieldcraft_engine::results::shown(Quantity::Length, *v, app.session.units())).collect();
@@ -330,7 +335,11 @@ pub fn controls(app: &mut ModelApp, view: &crate::results::Plot, ui: &mut egui::
                 editor.selected = Some(selected);
             }
             let valid = plot.values.iter().filter(|v| v.is_some()).count();
-            kit::status_line(ui, &format!("{valid}/{} values · {} gaps", plot.values.len(), plot.values.len() - valid), kit::StatusTone::Dim);
+            kit::status_line(
+                ui,
+                &crate::words::wfmt!("{valid}/{} values · {} gaps", plot.values.len(), plot.values.len() - valid),
+                kit::StatusTone::Dim,
+            );
         }
     }
     app.path_editor = Some(editor);
@@ -398,7 +407,7 @@ fn graph_range(lo: f64, hi: f64) -> (f64, [f64; 2]) {
 fn graph(ui: &mut egui::Ui, distance: &[f64], values: &[Option<f64>], unit: &str, t: &Tokens) -> Option<usize> {
     let finite: Vec<_> = values.iter().flatten().copied().filter(|v| v.is_finite()).collect();
     if finite.is_empty() {
-        kit::status_line(ui, "No defined values along this path", kit::StatusTone::Dim);
+        kit::status_line(ui, crate::words::ts("No defined values along this path"), kit::StatusTone::Dim);
         return None;
     }
     let (outer, response) = ui.allocate_exact_size(vec2(ui.available_width(), 145.0), egui::Sense::click());
@@ -444,7 +453,11 @@ fn graph(ui: &mut egui::Ui, distance: &[f64], values: &[Option<f64>], unit: &str
     let x = distance.get(index).copied()?;
     let value = values.get(index).copied().flatten();
     painter.line_segment([pos2(at(x, 0.0).x, rect.top()), pos2(at(x, 0.0).x, rect.bottom())], Stroke::new(1.0, t.text_dim));
-    response.backing_on_hover_text(format!("s {} {unit}\n{}", number(x), value.map_or_else(|| "Gap / undefined".to_string(), number)));
+    response.backing_on_hover_text(format!(
+        "s {} {unit}\n{}",
+        number(x),
+        value.map_or_else(|| crate::words::ts("Gap / undefined").to_string(), number)
+    ));
     Some(index)
 }
 

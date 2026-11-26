@@ -78,14 +78,16 @@ impl Info {
     /// Its header's icon and title.
     fn heading(&self, app: &ModelApp) -> (String, String) {
         match self {
-            Info::Refused => {
-                app.refused.as_ref().map(|u| (u.command.to_string(), format!("{}: not yet", crate::command_label(u.command)))).unwrap_or_default()
-            }
+            Info::Refused => app
+                .refused
+                .as_ref()
+                .map(|u| (u.command.to_string(), crate::words::wfmt!("{}: not yet", crate::command_label(u.command))))
+                .unwrap_or_default(),
             Info::Reply => app.reply.as_ref().map(|r| (r.command.clone(), r.label.clone())).unwrap_or_default(),
             Info::Properties(kind, name, _) => (kind.icon().to_string(), format!("{}: {name}", kind.label())),
-            Info::Seed(_) => ("mesh.seed.edge".into(), "Seed".into()),
-            Info::Mesh => ("mesh.tet.generate".into(), "Mesh".into()),
-            Info::Results(_) => ("results.deformed".into(), "Results".into()),
+            Info::Seed(_) => ("mesh.seed.edge".into(), crate::words::ts("Seed").into()),
+            Info::Mesh => ("mesh.tet.generate".into(), crate::words::ts("Mesh").into()),
+            Info::Results(_) => ("results.deformed".into(), crate::words::ts("Results").into()),
         }
     }
 }
@@ -292,7 +294,7 @@ fn close(app: &mut ModelApp, card: &Info) {
 /// that provides it (as the browser's ghost rows do).
 fn refused(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens) {
     let Some(u) = app.refused.clone() else { return };
-    ui.label(RichText::new("It needs:").color(t.text_dim));
+    ui.label(RichText::new(crate::words::ts("It needs:")).color(t.text_dim));
     let mut start = None;
     for fieldcraft_engine::requirement::Missing(r) in &u.missing {
         ui.horizontal_wrapped(|ui| {
@@ -364,39 +366,39 @@ fn form(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, bounds: Rect, anchor:
     let shown = card.window(&ctx).show(&ctx, |ui| {
     out = card.feature(ui, heading, false, missing.is_empty(), |ui| {
         if let Some(target) = selection::target(spec.id, &params) {
-            kit::section_heading(ui, "Target");
+            kit::section_heading(ui, crate::words::ts("Target"));
             ui.vertical(|ui| {
                 let tip = match target {
-                    selection::Target::Members => "The selection becomes the set's members (geometry by name, the mesh by label)",
+                    selection::Target::Members => crate::words::ts("The selection becomes the set's members (geometry by name, the mesh by label)"),
                     selection::Target::Set | selection::Target::TargetSet => {
-                        "Names a set of the selection here: an existing set with the same members, or a new one made on OK"
+                        crate::words::ts("Names a set of the selection here: an existing set with the same members, or a new one made on OK")
                     }
-                    selection::Target::Edges => "The selected design edges (Select: Edges) become the edges seeded",
+                    selection::Target::Edges => crate::words::ts("The selected design edges (Select: Edges) become the edges seeded"),
                     selection::Target::Position => {
-                        "Puts the point at what is selected: a vertex or node, the centre of a hole (its faces or rim), or the centroid of faces and edges"
+                        crate::words::ts("Puts the point at what is selected: a vertex or node, the centre of a hole (its faces or rim), or the centroid of faces and edges")
                     }
                     selection::Target::DatumPoint => {
-                        "Puts the point on what is selected: a vertex, an edge's midpoint, a face's centre, or the centre of a hole or of several items"
+                        crate::words::ts("Puts the point on what is selected: a vertex, an edge's midpoint, a face's centre, or the centre of a hole or of several items")
                     }
-                    selection::Target::Bodies => "The selected bodies (Select: Bodies), or the bodies of the selected faces, become the cells",
-                    selection::Target::ExtrudeFaces => "Pick the source face and use it, then pick the target surface and use it",
+                    selection::Target::Bodies => crate::words::ts("The selected bodies (Select: Bodies), or the bodies of the selected faces, become the cells"),
+                    selection::Target::ExtrudeFaces => crate::words::ts("Pick the source face and use it, then pick the target surface and use it"),
                     selection::Target::Faces => {
-                        "The selected design faces (Shift-click to pick, Select: Faces) become the form's faces, in place of a sphere"
+                        crate::words::ts("The selected design faces (Shift-click to pick, Select: Faces) become the form's faces, in place of a sphere")
                     }
                 };
                 let button = match target {
-                    selection::Target::ExtrudeFaces if selection::extrude_key(&params) == "source" => "Use as source",
-                    selection::Target::ExtrudeFaces => "Use as target surface",
-                    _ => "Use selection",
+                    selection::Target::ExtrudeFaces if selection::extrude_key(&params) == "source" => crate::words::ts("Use as source"),
+                    selection::Target::ExtrudeFaces => crate::words::ts("Use as target surface"),
+                    _ => crate::words::ts("Use selection"),
                 };
                 use_selection = kit::button(ui, button, kit::Button::Enabled(selected.is_some())).backing_on_hover_text(tip).clicked();
                 match &selected {
                     Some(text) => ui.add(egui::Label::new(RichText::new(text).color(t.pick_selected)).wrap()),
-                    None => ui.add(egui::Label::new(RichText::new("Pick in the viewport, or choose below").color(t.text_dim)).wrap()),
+                    None => ui.add(egui::Label::new(RichText::new(crate::words::ts("Pick in the viewport, or choose below")).color(t.text_dim)).wrap()),
                 };
             });
         }
-        kit::section_heading(ui, "Parameters");
+        kit::section_heading(ui, crate::words::ts("Parameters"));
         // The typed fields edit the parameters' object (every command has a form, and the form
         // and the control channel only ever store an object).
         match (spec.form, params.as_object().cloned()) {
@@ -434,7 +436,7 @@ fn form(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, bounds: Rect, anchor:
                 d.touched.extend(out.touched);
             }
             _ => {
-                kit::status_line(ui, "These parameters do not fit this form: cancel it and start the command again", kit::StatusTone::Error);
+                kit::status_line(ui, crate::words::ts("These parameters do not fit this form: cancel it and start the command again"), kit::StatusTone::Error);
             }
         }
         if let Some(e) = &d.error {
@@ -454,7 +456,7 @@ fn form(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, bounds: Rect, anchor:
         // Read after the fields are drawn: a field holding something that is not a value, or
         // a running job, keeps OK greyed (the kit's `applying`).
         kit::ComputeStatus {
-            text: running.as_ref().map(|job| format!("{job} is running")),
+            text: running.as_ref().map(|job| crate::words::wfmt!("{job} is running")),
             busy: running.is_some(),
             applying: running.is_some() || invalid > 0,
         }
@@ -463,8 +465,8 @@ fn form(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, bounds: Rect, anchor:
     let ready = invalid == 0 && missing.is_empty() && running.is_none();
     if !ready && let Some(ok) = solidcraft_ui_registry::rect_of("dialog:ok") {
         let not_ready = match &running {
-            Some(job) => format!("{job} is running: wait for it or cancel it"),
-            None if invalid > 0 => format!("{missing}\nA field holds something that is not a value").trim().to_string(),
+            Some(job) => crate::words::wfmt!("{job} is running: wait for it or cancel it"),
+            None if invalid > 0 => crate::words::wfmt!("{missing}\nA field holds something that is not a value").trim().to_string(),
             None => missing.clone(),
         };
         let waits = ui.interact(ok, form_id.with("ok_waits"), egui::Sense::click());
@@ -529,12 +531,12 @@ fn properties(app: &mut ModelApp, ui: &mut egui::Ui, kind: Def, name: &str, rows
     let editing = kind.edit_command(&app.session.model, name);
     ui.horizontal(|ui| {
         if let Some(command) = &editing {
-            edit = kit::button(ui, "Edit…", kit::Button::Normal)
-                .backing_on_hover_text(format!("{}, filled in", crate::command_label(command)))
+            edit = kit::button(ui, crate::words::ts("Edit…"), kit::Button::Normal)
+                .backing_on_hover_text(crate::words::wfmt!("{}, filled in", crate::command_label(command)))
                 .clicked();
         }
-        delete = kit::button(ui, "Delete…", kit::Button::Normal)
-            .backing_on_hover_text(format!("Delete this {} (Delete key)", kind.label().to_lowercase()))
+        delete = kit::button(ui, crate::words::ts("Delete…"), kit::Button::Normal)
+            .backing_on_hover_text(crate::words::wfmt!("Delete this {} (Delete key)", kind.label().to_lowercase()))
             .clicked();
     });
     if edit && let Some((command, params)) = kind.edit(&app.session.model, name, app.session.units()) {
@@ -553,10 +555,12 @@ fn seed_card(app: &mut ModelApp, ui: &mut egui::Ui, edge: fieldcraft_model::Geom
     ui.add_space(solidcraft_theme::Tokens::get().space_6);
     let (mut edit, mut delete) = (false, false);
     ui.horizontal(|ui| {
-        edit = kit::button(ui, "Edit…", kit::Button::Normal)
-            .backing_on_hover_text(format!("{}, filled in", crate::command_label(crate::menu::seed_command(&edge))))
+        edit = kit::button(ui, crate::words::ts("Edit…"), kit::Button::Normal)
+            .backing_on_hover_text(crate::words::wfmt!("{}, filled in", crate::command_label(crate::menu::seed_command(&edge))))
             .clicked();
-        delete = kit::button(ui, "Delete", kit::Button::Normal).backing_on_hover_text("Clear this seed (undo brings it back)").clicked();
+        delete = kit::button(ui, crate::words::ts("Delete"), kit::Button::Normal)
+            .backing_on_hover_text(crate::words::ts("Clear this seed (undo brings it back)"))
+            .clicked();
     });
     let target = crate::menu::Target::Seed(edge);
     if edit {
@@ -589,19 +593,24 @@ fn mesh_card(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens) {
         }
     };
     let (nodes, elements) = (app.session.model.nodes().len(), app.session.model.elements().len());
-    let size = [("Nodes".to_string(), crate::describe::quantity(nodes as f64)), ("Elements".to_string(), crate::describe::quantity(elements as f64))];
+    let size = [
+        (crate::words::ts("Nodes").to_string(), crate::describe::quantity(nodes as f64)),
+        (crate::words::ts("Elements").to_string(), crate::describe::quantity(elements as f64)),
+    ];
     property_grid(ui, "fc_mesh_size", &size);
     let mut edit = None;
     if made.is_empty() && elements > 0 {
         ui.add_space(k.space_4);
-        ui.label(RichText::new("Not made by a mesher in this model (imported or built by hand)").size(k.font_caption).color(t.text_dim));
+        ui.label(
+            RichText::new(crate::words::ts("Not made by a mesher in this model (imported or built by hand)")).size(k.font_caption).color(t.text_dim),
+        );
     }
     for (i, (command, params, rows)) in made.iter().enumerate() {
         ui.add_space(k.space_8);
         ui.label(RichText::new(crate::command_label(command)).strong());
         property_grid(ui, &format!("fc_mesh_made_{i}"), rows);
-        if kit::button(ui, "Edit…", kit::Button::Normal)
-            .backing_on_hover_text(format!("{}: its form with these parameters", crate::command_label(command)))
+        if kit::button(ui, crate::words::ts("Edit…"), kit::Button::Normal)
+            .backing_on_hover_text(crate::words::wfmt!("{}: its form with these parameters", crate::command_label(command)))
             .clicked()
         {
             edit = Some((command.clone(), params.clone()));
@@ -672,7 +681,7 @@ fn words(v: &Value, depth: usize) -> String {
         Value::Array(a) if depth >= DEPTH || a.iter().any(Value::is_object) => count(a.len(), "item"),
         Value::Array(a) => {
             let first: Vec<String> = a.iter().take(LIST).map(nested).collect();
-            if a.len() > LIST { format!("{} items: {}, …", a.len(), first.join(", ")) } else { first.join(", ") }
+            if a.len() > LIST { crate::words::wfmt!("{} items: {}, …", a.len(), first.join(", ")) } else { first.join(", ") }
         }
         Value::Object(o) if o.is_empty() => "none".into(),
         Value::Object(o) if depth >= DEPTH => count(o.len(), "field"),

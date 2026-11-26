@@ -105,7 +105,7 @@ impl ModelApp {
         let reports = match self.session.execute("diagnostics.crash_reports", &json!({})) {
             Ok(r) => r.get("reports").and_then(Value::as_array).map_or_else(Vec::new, |a| a.iter().filter_map(summary_of).collect()),
             Err(e) => {
-                self.set_status(format!("Crash reports: {e}"), true);
+                self.set_status(crate::words::wfmt!("Crash reports: {e}"), true);
                 return;
             }
         };
@@ -121,7 +121,7 @@ impl ModelApp {
         };
         let r = self.run("diagnostics.crash_reports.delete", params)?;
         let n = r.get("deleted").and_then(Value::as_u64).unwrap_or(0);
-        self.set_status(format!("Deleted {n} crash report{}", if n == 1 { "" } else { "s" }), false);
+        self.set_status(crate::words::wfmt!("Deleted {n} crash report{}", if n == 1 { "" } else { "s" }), false);
         self.open_crash_reports();
         Ok(r)
     }
@@ -133,9 +133,12 @@ impl ModelApp {
             return;
         }
         log::warn!(
-            "{} crash report(s) since the last start: {}",
-            crashes.len(),
-            crashes.iter().map(|c| c.id.as_str()).collect::<Vec<_>>().join(", ")
+            "{}",
+            crate::words::wfmt!(
+                "{} crash report(s) since the last start: {}",
+                crashes.len(),
+                crashes.iter().map(|c| c.id.as_str()).collect::<Vec<_>>().join(", ")
+            )
         );
         if self.prompt.is_none() {
             self.prompt = Some(Prompt::Crashed(crashes));
@@ -183,7 +186,7 @@ impl ModelApp {
             match bug_report::save_attachments(draft) {
                 Ok(dir) => saved = Some(dir),
                 Err(e) => {
-                    self.set_status(format!("Report a Bug: could not save the files to attach: {e}"), true);
+                    self.set_status(crate::words::wfmt!("Report a Bug: could not save the files to attach: {e}"), true);
                     return;
                 }
             }
@@ -194,7 +197,7 @@ impl ModelApp {
         match &self.services.open_url {
             Some(open) => {
                 if let Err(e) = open(&draft.url) {
-                    self.set_status(format!("Report a Bug: could not open the browser: {e}"), true);
+                    self.set_status(crate::words::wfmt!("Report a Bug: could not open the browser: {e}"), true);
                     return;
                 }
             }
@@ -202,8 +205,8 @@ impl ModelApp {
         }
         log::info!("bug report opened in the browser ({} bytes, {} attachment(s))", draft.url.len(), draft.attachments.len());
         let text = match saved {
-            Some(dir) => format!("The issue form opened in your browser: attach the files in {} and submit it there.", dir.display()),
-            None => "The issue form opened in your browser: review it and submit it there.".to_string(),
+            Some(dir) => crate::words::wfmt!("The issue form opened in your browser: attach the files in {} and submit it there.", dir.display()),
+            None => crate::words::ts("The issue form opened in your browser: review it and submit it there.").to_string(),
         };
         self.set_status(text, false);
         self.prompt = None;
@@ -228,15 +231,15 @@ fn summary_of(v: &Value) -> Option<Summary> {
 }
 
 fn size(bytes: usize) -> String {
-    if bytes < 1024 { format!("{bytes} B") } else { format!("{} KB", bytes.div_ceil(1024)) }
+    if bytes < 1024 { format!("{bytes} B") } else { crate::words::wfmt!("{} KB", bytes.div_ceil(1024)) }
 }
 
 fn kind_label(kind: &str) -> &'static str {
     match kind {
-        "unclean_exit" => "FieldZ closed unexpectedly",
-        "command_panic" => "A command hit an internal error",
-        "solver_error" => "A solve stopped",
-        _ => "FieldZ hit an internal error",
+        "unclean_exit" => crate::words::ts("FieldZ closed unexpectedly"),
+        "command_panic" => crate::words::ts("A command hit an internal error"),
+        "solver_error" => crate::words::ts("A solve stopped"),
+        _ => crate::words::ts("FieldZ hit an internal error"),
     }
 }
 
@@ -250,22 +253,22 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             };
             let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_crashed"), "diagnostics.bug_report", kind_label(&first.kind))
                 .tone(kit::Tone::Warning)
-                .actions("Report It…", "Not Now", None)
+                .actions(crate::words::ts("Report It…"), crate::words::ts("Not Now"), None)
                 .detail(&first.message)
                 .show(ctx, true, |ui| {
                     message(
                         ui,
                         match first.kind.as_str() {
-                            "unclean_exit" => "FieldZ closed unexpectedly the last time it ran.",
-                            _ => "FieldZ hit an internal error the last time it ran.",
+                            "unclean_exit" => crate::words::ts("FieldZ closed unexpectedly the last time it ran."),
+                            _ => crate::words::ts("FieldZ hit an internal error the last time it ran."),
                         },
                     );
                     if reports.len() > 1 {
-                        note(ui, &format!("And {} more since.", reports.len() - 1));
+                        note(ui, &crate::words::wfmt!("And {} more since.", reports.len() - 1));
                     }
                     note(
                         ui,
-                        "A crash report was saved on this computer. Reporting it opens a GitHub issue you review first; nothing is sent until you submit it.",
+                        crate::words::ts("A crash report was saved on this computer. Reporting it opens a GitHub issue you review first; nothing is sent until you submit it."),
                     );
                 });
             if action == kit::Action::Ok {
@@ -286,10 +289,10 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             let (closed, action) = crate::frame::window(
                 egui::Id::unique("fc_crash_reports"),
                 "diagnostics.bug_report",
-                "Crash Reports",
+                crate::words::ts("Crash Reports"),
                 crate::frame::Width::Wide,
             )
-            .actions("", "Close", Some("Delete All"))
+            .actions("", crate::words::ts("Close"), Some(crate::words::ts("Delete All")))
             .apply_enabled(!reports.is_empty())
             .show(ctx, true, |ui| {
                 // The kit's crash report list, as SolidCraft's Crash Reports window shows its own.
@@ -297,11 +300,11 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
                 ui.spacing_mut().item_spacing.y = k.space_10;
                 kit::text(
                     ui,
-                    "Saved on this computer, newest first. Reporting one opens a GitHub issue you review first; nothing is sent until you submit it.",
+                    crate::words::ts("Saved on this computer, newest first. Reporting one opens a GitHub issue you review first; nothing is sent until you submit it."),
                     kit::Text::Hint("intro"),
                 );
                 if reports.is_empty() {
-                    kit::empty_box(ui, "none", "No crash reports are saved on this computer.");
+                    kit::empty_box(ui, "none", crate::words::ts("No crash reports are saved on this computer."));
                     return;
                 }
                 kit::report_list(ui, "reports", k.control_height * 10.0 + k.space_10 * 4.0, |ui| {
@@ -311,13 +314,13 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
                             ui.spacing_mut().item_spacing.y = k.space_6;
                             ui.add_space(k.space_10);
                             kit::report_header(ui, kind_label(&r.kind), r.count, &r.time, &format!("{} · {}", kind_label(&r.kind), r.time), |ui| {
-                                if kit::bin_button(ui, "Delete").clicked() {
+                                if kit::bin_button(ui, crate::words::ts("Delete")).clicked() {
                                     act = Some(Act::Delete(r.id.clone()));
                                 }
-                                if kit::icon_label_button(ui, "Copy Path", "copy", true, false).backing_on_hover_text(&r.path).clicked() {
+                                if kit::icon_label_button(ui, crate::words::ts("Copy Path"), "copy", true, false).backing_on_hover_text(&r.path).clicked() {
                                     act = Some(Act::Copy(r.path.clone()));
                                 }
-                                if kit::icon_label_button(ui, "Report…", "bug_report", true, false).clicked() {
+                                if kit::icon_label_button(ui, crate::words::ts("Report…"), "bug_report", true, false).clicked() {
                                     act = Some(Act::Report(r.id.clone()));
                                 }
                             });
@@ -340,7 +343,7 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
                 Some(Act::Report(id)) => app.report_bug(Some(id)),
                 Some(Act::Copy(path)) => {
                     ctx.copy_text(path);
-                    app.set_status("Copied the crash report's folder", false);
+                    app.set_status(crate::words::ts("Copied the crash report's folder"), false);
                 }
                 Some(Act::Delete(id)) => {
                     let _ = app.delete_crash_reports(Some(&id));
@@ -361,36 +364,41 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             let (closed, action) = crate::frame::window(
                 egui::Id::unique("fc_report_bug"),
                 "diagnostics.bug_report",
-                "Report a Bug",
+                crate::words::ts("Report a Bug"),
                 crate::frame::Width::Wide,
             )
-            .actions("Open GitHub Issue", "Cancel", None)
+            .actions(crate::words::ts("Open GitHub Issue"), crate::words::ts("Cancel"), None)
             .fields()
             .show(ctx, true, |ui| {
-                note(ui, "This opens a GitHub issue in your browser, filled in with what is shown below. Nothing is sent until you submit it there.");
+                note(
+                    ui,
+                    crate::words::ts(
+                        "This opens a GitHub issue in your browser, filled in with what is shown below. Nothing is sent until you submit it there.",
+                    ),
+                );
                 if let Some(p) = &form.problem {
                     kit::status_line(ui, p, kit::StatusTone::Error);
                 }
                 let hint = form.draft().title.clone();
-                kit::text_row(ui, "Title", &mut form.title, &hint);
-                kit::multiline_text_field(ui, "What happened", egui::Id::unique("fc_report_observed"), &mut form.observed);
-                kit::checkbox(ui, "Share my session", &mut form.share_session)
-                    .backing_on_hover_text("Attach the commands that built the model, to replay it. They can name your files.");
-                note(ui, &format!("The {commands} command(s) that built the model, the version and the OS; they can name your files."));
+                kit::text_row(ui, crate::words::ts("Title"), &mut form.title, &hint);
+                kit::multiline_text_field(ui, crate::words::ts("What happened"), egui::Id::unique("fc_report_observed"), &mut form.observed);
+                kit::checkbox(ui, crate::words::ts("Share my session"), &mut form.share_session)
+                    .backing_on_hover_text(crate::words::ts("Attach the commands that built the model, to replay it. They can name your files."));
+                note(ui, &crate::words::wfmt!("The {commands} command(s) that built the model, the version and the OS; they can name your files."));
                 ui.add_enabled_ui(form.share_session, |ui| {
-                    kit::checkbox(ui, "Include the model file", &mut form.include_model)
-                        .backing_on_hover_text("Attach the model too (you attach the file yourself).");
+                    kit::checkbox(ui, crate::words::ts("Include the model file"), &mut form.include_model)
+                        .backing_on_hover_text(crate::words::ts("Attach the model too (you attach the file yourself)."));
                 });
                 if !form.share_session {
                     form.include_model = false;
                 }
                 app.include_model_if_asked(&mut form);
                 let draft = form.draft().clone();
-                kit::section(ui, "fc_report_sent", "What is sent", true, |ui| {
+                kit::section(ui, "fc_report_sent", crate::words::ts("What is sent"), true, |ui| {
                     // The kit's read-only report lines (virtualised, its mono font and height).
                     kit::text_lines(ui, "fc_report_sent_lines", &sent_text(&draft));
                     if draft.clipboard.is_some() {
-                        note(ui, "The session goes on the clipboard too, to paste.");
+                        note(ui, crate::words::ts("The session goes on the clipboard too, to paste."));
                     }
                 });
             });
@@ -409,12 +417,12 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
 
 /// What the report sends, as plain lines: the title, each filled field and each attachment.
 fn sent_text(draft: &Draft) -> String {
-    let mut lines = vec![format!("Title: {}", draft.title)];
+    let mut lines = vec![crate::words::wfmt!("Title: {}", draft.title)];
     for (k, v) in draft.fields.iter().filter(|(_, v)| !v.is_empty()) {
         lines.push(format!("{k}:"));
         lines.extend(v.lines().map(str::to_string));
     }
-    lines.extend(draft.attachments.iter().map(|a| format!("Attach {} ({}): {}", a.name, size(a.bytes.len()), a.what)));
+    lines.extend(draft.attachments.iter().map(|a| crate::words::wfmt!("Attach {} ({}): {}", a.name, size(a.bytes.len()), a.what)));
     lines.join("\n")
 }
 

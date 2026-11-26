@@ -67,6 +67,7 @@ pub mod titlebar;
 pub mod toolbar;
 pub mod updates;
 pub mod viewport;
+pub mod words;
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -2739,9 +2740,9 @@ impl ModelApp {
     }
 }
 
-/// A command's name as people see it (its label).
+/// A command's name as people see it (its label), in the thread's language.
 pub fn command_label(id: &str) -> &str {
-    fieldcraft_engine::find_command(id).map_or(id, |c| c.label)
+    fieldcraft_engine::find_command(id).map_or(id, |c| crate::words::cap(&format!("command.{}", c.id), c.label))
 }
 
 /// What a probe of `node` read (`solve.probe`'s reply), as (what, value) rows with units from

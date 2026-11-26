@@ -13,6 +13,7 @@ fieldcraft-engine = { workspace = true }
 fieldcraft-gpu = { workspace = true }
 fieldcraft-render = { workspace = true }
 fieldcraft-ui-egui = { workspace = true }
+solidcraft-ui-text = { workspace = true }
 egui = { workspace = true }
 egui-wgpu = { workspace = true }
 wgpu = { workspace = true }

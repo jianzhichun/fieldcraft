@@ -129,8 +129,11 @@ pub fn app_bar(app: &mut ModelApp, ui: &mut egui::Ui) {
 fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
     let (undo, redo) = app.session.undo_depth();
     let busy = app.busy().is_some();
-    let (save_tip, undo_tip, redo_tip) =
-        (format!("Save ({})", shortcut("S")), format!("Undo ({})", shortcut("Z")), format!("Redo ({})", shortcut("Shift+Z")));
+    let (save_tip, undo_tip, redo_tip) = (
+        crate::words::wfmt!("Save ({})", shortcut("S")),
+        crate::words::wfmt!("Undo ({})", shortcut("Z")),
+        crate::words::wfmt!("Redo ({})", shortcut("Shift+Z")),
+    );
     let version_text = format!("v{}", crate::VERSION);
     let url = release_notes();
     let version = (!app.embedded).then(|| app_bar::Version { text: &version_text, url: &url });
@@ -145,8 +148,8 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
         leading: None,
         mark: &mark,
         name: "FieldZ",
-        home: chrome("home", "home", "Start: new, open, recent files and samples"),
-        file: "File",
+        home: chrome("home", "home", crate::words::ts("Start: new, open, recent files and samples")),
+        file: crate::words::ts("File"),
         file_open: app.ui.menu.as_deref() == Some("file"),
         actions: vec![
             button("save", "save", &save_tip, !busy, false),
@@ -154,11 +157,13 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
             button("redo", "redo", &redo_tip, redo > 0 && !busy, true),
         ],
         quick: 1,
-        help: chrome("help", "help", "Help: navigation, keys, updates, about"),
-        settings: chrome("settings", "settings", "Settings: units, the window, privacy and updates"),
+        help: chrome("help", "help", crate::words::ts("Help: navigation, keys, updates, about")),
+        settings: chrome("settings", "settings", crate::words::ts("Settings: units, the window, privacy and updates")),
         report: app_bar::Report {
-            label: "Report a bug",
-            tip: "Report a bug: draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
+            label: crate::words::ts("Report a bug"),
+            tip: crate::words::ts(
+                "Report a bug: draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
+            ),
             icon_only: false,
         },
         pills,
@@ -224,7 +229,7 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
     // The quick-access button: the theme.
     if let Some((first, _)) = out.quick {
         let rect = Rect::from_center_size(pos2(first, cy), vec2(32.0, 32.0));
-        let (icon, tip) = if app.ui.dark { ("ui.sun", "Light theme") } else { ("ui.moon", "Dark theme") };
+        let (icon, tip) = if app.ui.dark { ("ui.sun", crate::words::ts("Light theme")) } else { ("ui.moon", crate::words::ts("Dark theme")) };
         if quick_button(ui, "theme", icon, rect, tip) {
             app.ui.dark = !app.ui.dark;
         }
@@ -239,7 +244,7 @@ fn bar(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, content: Rect) {
         app.place("app_bar:update", pill);
     }
     // Solve: right-aligned in the span the kit leaves for an offer pill.
-    let solve_w = kit::icon_label_width(ui, if out.offer_labeled { SOLVE } else { "" }, Some(SOLVE_ICON), true);
+    let solve_w = kit::icon_label_width(ui, if out.offer_labeled { crate::words::ts(SOLVE) } else { "" }, Some(SOLVE_ICON), true);
     let solve = Rect::from_center_size(pos2(offer.right() - solve_w / 2.0, cy), vec2(solve_w, k.control_height));
     let drawn_left = if offer.width() >= solve_w {
         solve_button(app, ui, solve, out.offer_labeled);
@@ -270,7 +275,7 @@ const PILL_TAB_ROOM: f32 = 300.0;
 /// The room the offer span asks the kit for: Solve with its label, and the Update pill with its own
 /// when one is on offer, with the gap between them.
 fn offer_room(app: &mut ModelApp, ui: &mut egui::Ui) -> f32 {
-    let solve = kit::icon_label_width(ui, SOLVE, Some(SOLVE_ICON), true);
+    let solve = kit::icon_label_width(ui, crate::words::ts(SOLVE), Some(SOLVE_ICON), true);
     if app.embedded {
         return solve;
     }
@@ -282,9 +287,9 @@ fn update_pill_width(app: &mut ModelApp, ui: &mut egui::Ui) -> Option<f32> {
     use crate::updates::Offer;
     let offer = crate::updates::offer(app)?;
     let label = match &offer {
-        Offer::Release(version) => format!("Update to {version}"),
-        Offer::Busy(_) => "Update".to_string(),
-        Offer::Reload => "Reload to update".to_string(),
+        Offer::Release(version) => crate::words::wfmt!("Update to {version}"),
+        Offer::Busy(_) => crate::words::ts("Update").to_string(),
+        Offer::Reload => crate::words::ts("Reload to update").to_string(),
     };
     let k = solidcraft_theme::Tokens::get();
     let text = ui.painter().layout_no_wrap(label, FontId::proportional(k.font_label), k.app_bar_text).size().x;
@@ -302,14 +307,14 @@ fn update_pill(app: &mut ModelApp, ui: &mut egui::Ui, span: Rect, labeled: bool)
     }
     let offer = crate::updates::offer(app)?;
     let (full, tip) = match &offer {
-        Offer::Release(version) => (format!("Update to {version}"), format!("FieldZ {version} is available")),
-        Offer::Busy(busy) => ("Update".to_string(), busy.clone()),
-        Offer::Reload => ("Reload to update".to_string(), "A new version of FieldZ is available".to_string()),
+        Offer::Release(version) => (crate::words::wfmt!("Update to {version}"), crate::words::wfmt!("FieldZ {version} is available")),
+        Offer::Busy(busy) => (crate::words::ts("Update").to_string(), busy.clone()),
+        Offer::Reload => (crate::words::ts("Reload to update").to_string(), crate::words::ts("A new version of FieldZ is available").to_string()),
     };
     let k = solidcraft_theme::Tokens::get();
     let font = FontId::proportional(k.font_label);
     let (icon_x, text_x, right_pad) = (16.0, PILL_TEXT_X, PILL_RIGHT_PAD);
-    let labels = [full.as_str(), "Update"];
+    let labels = [full.as_str(), crate::words::ts("Update")];
     let label = labels.iter().enumerate().filter(|_| labeled).find_map(|(i, text)| {
         let width = text_x + ui.painter().layout_no_wrap(text.to_string(), font.clone(), k.app_bar_text).size().x + right_pad;
         let room = if i + 1 < labels.len() { span.width() - PILL_TAB_ROOM } else { span.width() };
@@ -321,7 +326,7 @@ fn update_pill(app: &mut ModelApp, ui: &mut egui::Ui, span: Rect, labeled: bool)
     }
     let rect = Rect::from_min_size(pos2(span.right() - width, span.center().y - PILL_HEIGHT / 2.0), vec2(width, PILL_HEIGHT));
     let resp = ui.interact(rect, ui.scope_id().with("fc_update_pill"), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label.map_or("Update", |(t, _)| t)));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label.map_or(crate::words::ts("Update"), |(t, _)| t)));
     let hot = resp.hovered() || resp.has_focus();
     let radius = PILL_HEIGHT / 2.0 * f32::from(k.radius_xl) / 10.0;
     ui.painter().rect_filled(rect, radius, if hot { k.app_bar_hover_button } else { k.accent });
@@ -355,11 +360,15 @@ fn quick_button(ui: &mut egui::Ui, key: &str, icon: &'static str, rect: Rect, ti
 fn solve_button(app: &mut ModelApp, ui: &mut egui::Ui, solve: Rect, labeled: bool) {
     let missing = app.unavailable("solve.run");
     let can = missing.is_none() && app.busy().is_none();
-    let head = if missing.is_some() { "Solve: not ready yet (or try Home › Samples)" } else { "Solve every step and show the results" };
+    let head = if missing.is_some() {
+        crate::words::ts("Solve: not ready yet (or try Home › Samples)")
+    } else {
+        crate::words::ts("Solve every step and show the results")
+    };
     let tip = fieldcraft_engine::requirement::Unavailable::tip(head, missing.as_ref());
     let mut slot = ui.new_child(egui::UiBuilder::new().max_rect(solve).id_salt("fc_solve").layout(egui::Layout::left_to_right(egui::Align::Center)));
-    let resp = kit::icon_label_action(&mut slot, if labeled { SOLVE } else { "" }, Some(SOLVE_ICON), can, true);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can, SOLVE));
+    let resp = kit::icon_label_action(&mut slot, if labeled { crate::words::ts(SOLVE) } else { "" }, Some(SOLVE_ICON), can, true);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can, crate::words::ts(SOLVE)));
     let resp = if can { resp.backing_on_hover_text(tip) } else { resp.backing_on_disabled_hover_text(tip) };
     if resp.clicked() && can {
         app.solve_all();
@@ -371,21 +380,21 @@ fn solve_button(app: &mut ModelApp, ui: &mut egui::Ui, solve: Rect, labeled: boo
 /// the model and its + starts a new one: both are File › New (`file.new`), which asks first
 /// when that would discard unsaved changes.
 fn document_tab(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
-    let migrated = app.session.migrated_from.map(|n| format!(" (from format {n})")).unwrap_or_default();
+    let migrated = app.session.migrated_from.map(|n| crate::words::wfmt!(" (from format {n})")).unwrap_or_default();
     let name = format!("{}{migrated}", app.model_name());
     let dirty = app.session.is_dirty();
     if x1 - x0 < TAB_STRIP_ROOM + TAB_MIN {
         return;
     }
-    let mut place = app.session.path.clone().unwrap_or_else(|| "Not saved yet".into());
+    let mut place = app.session.path.clone().unwrap_or_else(|| crate::words::ts("Not saved yet").into());
     if let Some(n) = app.session.migrated_from {
-        place.push_str(&format!("\nOpened from a format {n} file: the first save keeps that file as a copy beside it"));
+        place.push_str(&crate::words::wfmt!("\nOpened from a format {n} file: the first save keeps that file as a copy beside it"));
         for note in &app.session.migration_notes {
             place.push_str(&format!("\n{note}"));
         }
     }
     let close_key = shortcut("W");
-    let menu = [app_bar::TabMenuRow::new("close", "Close", &close_key)];
+    let menu = [app_bar::TabMenuRow::new("close", crate::words::ts("Close"), &close_key)];
     let mut strip = app_bar::TabStrip {
         tabs: vec![app_bar::DocTab { name: &name, list_name: &name, dirty, place: &place, security: None, views: &[] }],
         selected: 0,
@@ -395,10 +404,10 @@ fn document_tab(app: &mut ModelApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32
         double_click_renames: false,
         rename: None,
         menu: &menu,
-        close_name: "Close the model",
-        close_tip: "Close the model: a new, empty one takes its place (File › New)",
-        more_tip: "Every model",
-        new_tip: "New model (File › New)",
+        close_name: crate::words::ts("Close the model"),
+        close_tip: crate::words::ts("Close the model: a new, empty one takes its place (File › New)"),
+        more_tip: crate::words::ts("Every model"),
+        new_tip: crate::words::ts("New model (File › New)"),
         id: egui::Id::unique("fc_document_tabs"),
         handles: TAB_HANDLES,
         // One view a model, so no view tabs, switcher, layouts or tear-off.
@@ -461,7 +470,7 @@ const TAB_HANDLES: app_bar::TabHandles<'static> = app_bar::TabHandles {
 
 /// The shortcut text with this platform's command key.
 pub fn shortcut(key: &str) -> String {
-    format!("{}+{key}", if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" })
+    format!("{}+{key}", if cfg!(target_os = "macos") { crate::words::ts("Cmd") } else { crate::words::ts("Ctrl") })
 }
 
 /// Help: how to navigate, keys, updates, crash reports and the version.
@@ -469,15 +478,20 @@ fn help_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
     // The samples are on the start page (Home) and in File › Samples…, not here: listed here
     // too, they pushed Report a Bug, Crash Reports, Settings and the version below a laptop
     // window's edge.
-    crate::frame::menu_heading(ui, "Navigation");
+    crate::frame::menu_heading(ui, crate::words::ts("Navigation"));
     let note = |ui: &mut egui::Ui, text: &str| {
         ui.horizontal(|ui| {
             ui.add_space(solidcraft_theme::Tokens::get().space_8);
             crate::files::note(ui, text);
         });
     };
-    note(ui, "Left drag orbits (or pans or zooms: the navigation bar), right or middle drag pans, the wheel zooms, F or a double click fits.");
-    note(ui, &format!("S or {} searches every command; `id {{json}}` typed there runs it.", shortcut("K")));
+    note(
+        ui,
+        crate::words::ts(
+            "Left drag orbits (or pans or zooms: the navigation bar), right or middle drag pans, the wheel zooms, F or a double click fits.",
+        ),
+    );
+    note(ui, &crate::words::wfmt!("S or {} searches every command; `id {{json}}` typed there runs it.", shortcut("K")));
     crate::frame::menu_separator(ui);
     let row =
         |ui: &mut egui::Ui, id: &str, label: &str, tip: &str| crate::frame::menu_row(ui, id, label, None, true).backing_on_hover_text(tip).clicked();
@@ -486,21 +500,35 @@ fn help_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
         report = row(
             ui,
             "help.report_bug",
-            "Report a Bug…",
-            "Draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it",
+            crate::words::ts("Report a Bug…"),
+            crate::words::ts("Draft a GitHub issue with the version, the OS and the last error; nothing is sent until you submit it"),
         );
     }
     let (mut check, mut reinstall) = (false, false);
     if !app.embedded && app.updates_available() {
-        check = row(ui, "help.check_updates", "Check for Updates", "Ask GitHub Releases whether a newer FieldZ is published");
-        reinstall =
-            row(ui, "help.reinstall", "Reinstall FieldZ…", "Download this version again, verify it and swap it in, to repair a damaged install");
+        check = row(
+            ui,
+            "help.check_updates",
+            crate::words::ts("Check for Updates"),
+            crate::words::ts("Ask GitHub Releases whether a newer FieldZ is published"),
+        );
+        reinstall = row(
+            ui,
+            "help.reinstall",
+            crate::words::ts("Reinstall FieldZ…"),
+            crate::words::ts("Download this version again, verify it and swap it in, to repair a damaged install"),
+        );
     }
-    let crashes = row(ui, "help.crash_reports", "Crash Reports…", "The crash reports saved on this computer: report, copy or delete them");
-    let settings = row(ui, "help.settings", "Settings…", "Units, the window, privacy and updates");
+    let crashes = row(
+        ui,
+        "help.crash_reports",
+        crate::words::ts("Crash Reports…"),
+        crate::words::ts("The crash reports saved on this computer: report, copy or delete them"),
+    );
+    let settings = row(ui, "help.settings", crate::words::ts("Settings…"), crate::words::ts("Units, the window, privacy and updates"));
     crate::frame::menu_separator(ui);
     if !app.embedded {
-        note(ui, &format!("FieldZ {}", crate::VERSION));
+        note(ui, &crate::words::wfmt!("FieldZ {}", crate::VERSION));
     }
     // Everything the menu drew (control channel, tests).
     app.place("menu:help", ui.min_rect());

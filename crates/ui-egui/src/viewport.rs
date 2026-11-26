@@ -370,18 +370,20 @@ fn context_menu(app: &mut ModelApp, response: &egui::Response) {
             kit::Menu::separator(ui);
         }
         let has = !app.pick.selection.is_empty();
-        if crate::frame::menu_row(ui, "selection.create_set", "Create set from selection…", None, has).backing_on_hover_text(CREATE_SET_TIP).clicked()
+        if crate::frame::menu_row(ui, "selection.create_set", crate::words::ts("Create set from selection…"), None, has)
+            .backing_on_hover_text(crate::words::ts(CREATE_SET_TIP))
+            .clicked()
         {
             let _ = app.create_set_from_selection();
             ui.close();
         }
-        if crate::frame::menu_row(ui, "selection.clear", "Clear selection", Some("Esc"), has).clicked() {
+        if crate::frame::menu_row(ui, "selection.clear", crate::words::ts("Clear selection"), Some(crate::words::ts("Esc")), has).clicked() {
             app.clear_selection();
             ui.close();
         }
         kit::Menu::separator(ui);
         for f in Filter::ALL {
-            let label = format!("Select {}", f.label().to_lowercase());
+            let label = crate::words::wfmt!("Select {}", f.label().to_lowercase());
             let mut row = kit::MenuItem::new(f.label(), &label, "");
             row.checked = Some(app.pick.filter == f);
             if row.show(ui).clicked() {
@@ -419,7 +421,7 @@ fn selection_bar(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
         card.show_frame(ui, frame, rect, |ui| {
             // Centred on one line: the label sits on the taller drop-down's middle.
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                let label = kit::text(ui, "Select", kit::Text::Inline).rect;
+                let label = kit::text(ui, crate::words::ts("Select"), kit::Text::Inline).rect;
                 app.place("selection_bar:label", label);
                 let filter = kit::bounded_dropdown_menu(ui, "fc_selection_filter", app.pick.filter.label(), 110.0, |ui| {
                     for (i, f) in Filter::ALL.into_iter().enumerate() {
@@ -437,20 +439,25 @@ fn selection_bar(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
                 app.place("selection_bar:filter", filter.rect);
                 let boxes = app.pick.filter.boxes();
                 let tip = if boxes {
-                    "Box selection: a left drag selects the visible items inside the box (right or middle drag pans)"
+                    crate::words::ts("Box selection: a left drag selects the visible items inside the box (right or middle drag pans)")
                 } else {
-                    "Box selection picks nodes, element faces and elements"
+                    crate::words::ts("Box selection picks nodes, element faces and elements")
                 };
-                if kit::compact_button(ui, "Box", tip, boxes, app.pick.box_mode && boxes).clicked() {
+                if kit::compact_button(ui, crate::words::ts("Box"), tip, boxes, app.pick.box_mode && boxes).clicked() {
                     app.pick.box_mode = !app.pick.box_mode;
                 }
                 if !app.pick.selection.is_empty() {
                     let mut text = app.pick.selection.summary();
                     if app.pick.selection.capped() {
-                        text.push_str(" (capped)");
+                        text.push_str(crate::words::ts(" (capped)"));
                     }
-                    let clear =
-                        kit::StageAction { icon: Some("close"), label: "Clear the selection (Esc)", enabled: true, primary: false, reason: None };
+                    let clear = kit::StageAction {
+                        icon: Some("close"),
+                        label: crate::words::ts("Clear the selection (Esc)"),
+                        enabled: true,
+                        primary: false,
+                        reason: None,
+                    };
                     if kit::selection_actions(ui, &text, &[clear]) == Some(0) {
                         app.clear_selection();
                     }
@@ -631,7 +638,7 @@ fn paint_cpu(app: &mut ModelApp, ui: &egui::Ui, painter: &egui::Painter, rect: R
             Err(e) => {
                 app.viewport.cpu = None;
                 app.viewport.cpu_failed = Some(key.0);
-                app.set_status(format!("Viewport: {e}"), true);
+                app.set_status(crate::words::wfmt!("Viewport: {e}"), true);
                 return;
             }
         };
@@ -691,7 +698,7 @@ fn sampled_note(app: &ModelApp, painter: &egui::Painter, rect: Rect, t: &Tokens)
     if notes.is_empty() || !(show.loads || show.interactions) {
         return;
     }
-    let text = format!("Symbols sampled: {}", notes.join("; "));
+    let text = crate::words::wfmt!("Symbols sampled: {}", notes.join("; "));
     let room = sampled_note_width(app.viewport.rect.unwrap_or(rect), rect);
     let k = solidcraft_theme::Tokens::get();
     let galley = painter.layout(text, egui::FontId::proportional(k.font_small), t.text_dim, room);
@@ -741,7 +748,7 @@ fn axis_view(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
         hover: ui.input(|i| i.pointer.hover_pos()).filter(|p| area.contains(*p)),
         orbiting: false,
         snap_hint: false,
-        home_label: "Home view".into(),
+        home_label: crate::words::ts("Home view").into(),
     };
     match kit::view_compass::show(ui, &compass) {
         Some(kit::view_compass::ViewAction::Snap { direction: [x, y, z], .. }) => app.set_view(view_along(Vec3::new(x, y, z))),

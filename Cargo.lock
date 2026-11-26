@@ -1975,6 +1975,7 @@ dependencies = [
  "rustls",
  "serde_json",
  "signal-hook",
+ "solidcraft-ui-text",
  "ureq",
  "windows-sys 0.61.2",
 ]
@@ -2288,6 +2289,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "solidcraft-ui-text",
  "thiserror 2.0.21",
  "wgpu",
 ]

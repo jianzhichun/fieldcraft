@@ -63,9 +63,9 @@ fn node_stages(node: &str) -> &'static [Stage] {
 /// A stage's hover: what it needs and where; `None` once done or when optional.
 fn stage_tip(s: &StageState) -> Option<String> {
     match s.status {
-        Status::Next => Some(format!("Next: {} — {}", s.label, s.place)),
+        Status::Next => Some(crate::words::wfmt!("Next: {} — {}", s.label, s.place)),
         Status::Blocked | Status::Outdated => Some(s.detail.clone().unwrap_or_else(|| s.place.clone())),
-        Status::Todo => Some(format!("{} still to do — {}", s.label, s.place)),
+        Status::Todo => Some(crate::words::wfmt!("{} still to do — {}", s.label, s.place)),
         Status::Done | Status::Optional => None,
     }
 }
@@ -78,24 +78,24 @@ fn node_state(stages: &[StageState], node: &str) -> Option<(Status, String)> {
         .into_iter()
         .find(|st| own.iter().any(|s| s.status == *st))?;
     let tip: Vec<String> = own.iter().filter_map(|s| stage_tip(s)).collect();
-    let tip = if tip.is_empty() { "Done".to_string() } else { tip.join("\n") };
+    let tip = if tip.is_empty() { crate::words::ts("Done").to_string() } else { tip.join("\n") };
     Some((status, tip))
 }
 
 /// A ghost row's text: what its stage's command adds.
 fn ghost_label(stage: Stage) -> &'static str {
     match stage {
-        Stage::Geometry => "Open design…",
-        Stage::Prepare => "Seed edges…",
-        Stage::Mesh => "Generate mesh…",
-        Stage::Material => "Add material…",
-        Stage::Section => "Add section…",
-        Stage::Sets => "Add set…",
-        Stage::BoundaryConditions => "Add boundary condition…",
-        Stage::Loads => "Add load…",
-        Stage::Step => "Add step…",
-        Stage::Solve => "Solve…",
-        Stage::Results => "Show results…",
+        Stage::Geometry => crate::words::ts("Open design…"),
+        Stage::Prepare => crate::words::ts("Seed edges…"),
+        Stage::Mesh => crate::words::ts("Generate mesh…"),
+        Stage::Material => crate::words::ts("Add material…"),
+        Stage::Section => crate::words::ts("Add section…"),
+        Stage::Sets => crate::words::ts("Add set…"),
+        Stage::BoundaryConditions => crate::words::ts("Add boundary condition…"),
+        Stage::Loads => crate::words::ts("Add load…"),
+        Stage::Step => crate::words::ts("Add step…"),
+        Stage::Solve => crate::words::ts("Solve…"),
+        Stage::Results => crate::words::ts("Show results…"),
     }
 }
 
@@ -426,29 +426,29 @@ impl Def {
 
     pub fn label(self) -> &'static str {
         match self {
-            Def::Set => "Set",
-            Def::Material => "Material",
-            Def::Section => "Section",
-            Def::Step => "Step",
-            Def::BoundaryCondition => "Boundary Condition",
-            Def::Load => "Load",
-            Def::ReferencePoint => "Reference Point",
-            Def::Coupling => "Coupling",
-            Def::Contact => "Contact",
-            Def::Tie => "Tie",
-            Def::FluidDomain => "Fluid Domain",
-            Def::Datum => "Datum",
-            Def::Partition => "Partition",
-            Def::Mass => "Point Mass",
-            Def::Spring => "Spring or Dashpot",
-            Def::SizeControl => "Size Control",
-            Def::FaceMerge => "Face Merge",
-            Def::FaceSplit => "Face Split",
-            Def::Stitch => "Stitch",
-            Def::Defeature => "Defeature",
-            Def::InitialField => "Initial Field",
-            Def::MeshPlan => "Mesh Plan",
-            Def::Relaxation => "Relaxation Field",
+            Def::Set => crate::words::ts("Set"),
+            Def::Material => crate::words::ts("Material"),
+            Def::Section => crate::words::ts("Section"),
+            Def::Step => crate::words::ts("Step"),
+            Def::BoundaryCondition => crate::words::ts("Boundary Condition"),
+            Def::Load => crate::words::ts("Load"),
+            Def::ReferencePoint => crate::words::ts("Reference Point"),
+            Def::Coupling => crate::words::ts("Coupling"),
+            Def::Contact => crate::words::ts("Contact"),
+            Def::Tie => crate::words::ts("Tie"),
+            Def::FluidDomain => crate::words::ts("Fluid Domain"),
+            Def::Datum => crate::words::ts("Datum"),
+            Def::Partition => crate::words::ts("Partition"),
+            Def::Mass => crate::words::ts("Point Mass"),
+            Def::Spring => crate::words::ts("Spring or Dashpot"),
+            Def::SizeControl => crate::words::ts("Size Control"),
+            Def::FaceMerge => crate::words::ts("Face Merge"),
+            Def::FaceSplit => crate::words::ts("Face Split"),
+            Def::Stitch => crate::words::ts("Stitch"),
+            Def::Defeature => crate::words::ts("Defeature"),
+            Def::InitialField => crate::words::ts("Initial Field"),
+            Def::MeshPlan => crate::words::ts("Mesh Plan"),
+            Def::Relaxation => crate::words::ts("Relaxation Field"),
         }
     }
 
@@ -1016,10 +1016,10 @@ fn item_icon(m: &Model, kind: Def, name: &str) -> (&'static str, bool) {
 fn seed_note(s: &fieldcraft_model::Seed) -> String {
     let what = match s.divisions {
         fieldcraft_model::Divisions::Count(n) => format!("{n}"),
-        fieldcraft_model::Divisions::Size(h) => format!("size {h}"),
+        fieldcraft_model::Divisions::Size(h) => crate::words::wfmt!("size {h}"),
     };
-    let bias = s.bias.map(|b| format!(", bias {} {}", b.ratio, json_name(&b.toward))).unwrap_or_default();
-    let face = if s.on_face() { "face, " } else { "" };
+    let bias = s.bias.map(|b| crate::words::wfmt!(", bias {} {}", b.ratio, json_name(&b.toward))).unwrap_or_default();
+    let face = if s.on_face() { crate::words::ts("face, ") } else { "" };
     format!("{face}{what} {}{bias}", s.constraint.name())
 }
 
@@ -1184,16 +1184,16 @@ fn header(app: &mut ModelApp, ui: &mut egui::Ui) {
     if response.hovered() || response.has_focus() {
         kit::panel_header_hover(ui.painter(), rect);
     }
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Browser"));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, crate::words::ts("Browser")));
     let painter = ui.painter();
-    let title = painter.layout_no_wrap("Browser".into(), kit::type_face::semibold(k.font_heading), k.text);
+    let title = painter.layout_no_wrap(crate::words::ts("Browser").into(), kit::type_face::semibold(k.font_heading), k.text);
     painter.galley(pos2(rect.left() + k.space_6, rect.center().y - title.size().y / 2.0), title, k.text);
     let right = rect.right() - k.space_6;
     kit::disclosure(painter, pos2(right - k.form_section_icon_size / 2.0, rect.center().y), !collapsed, k.text_dim);
     let count = painter.layout_no_wrap(header_count(app), FontId::proportional(k.font_body), k.text_dim);
     let right = right - k.form_section_icon_size - k.space_6;
     painter.galley(pos2(right - count.size().x, rect.center().y - count.size().y / 2.0), count, k.text_dim);
-    let tip = if collapsed { "Expand the browser" } else { "Collapse the browser" };
+    let tip = if collapsed { crate::words::ts("Expand the browser") } else { crate::words::ts("Collapse the browser") };
     if response.on_hover_cursor(egui::CursorIcon::PointingHand).backing_on_hover_text(tip).clicked() {
         app.ui.browser_collapsed = !collapsed;
     }
@@ -1244,30 +1244,30 @@ fn geometry_items(m: &Model) -> Vec<Item> {
             _ => "geometry.datum",
         };
         let off = m.datum_suppressed(n);
-        let note = if off { format!("{kind} · suppressed") } else { kind.into() };
+        let note = if off { crate::words::wfmt!("{kind} · suppressed") } else { kind.into() };
         out.push(Item { dim: off, ..Item::new(Target::Def(Def::Datum, n.clone()), icon, n, Some(note)) });
     }
     for p in m.partitions() {
         let off = !m.partition_cuts(p);
-        let note = if off { format!("by {} · suppressed", p.datum) } else { format!("by {}", p.datum) };
+        let note = if off { crate::words::wfmt!("by {} · suppressed", p.datum) } else { crate::words::wfmt!("by {}", p.datum) };
         out.push(Item { dim: off, ..Item::new(Target::Def(Def::Partition, p.name.clone()), "geometry.partition", &p.name, Some(note)) });
     }
     for f in m.face_merges() {
         let note = match &f.into {
-            Some(into) => format!("{} · absorbed into {into}", f.body),
-            None => format!("{} · {} faces", f.body, f.faces.len()),
+            Some(into) => crate::words::wfmt!("{} · absorbed into {into}", f.body),
+            None => crate::words::wfmt!("{} · {} faces", f.body, f.faces.len()),
         };
         out.push(Item::def(m, Def::FaceMerge, &f.name, Some(note)));
     }
     for f in m.face_splits() {
-        out.push(Item::def(m, Def::FaceSplit, &f.name, Some(format!("{} · by {}", f.body, f.datum))));
+        out.push(Item::def(m, Def::FaceSplit, &f.name, Some(crate::words::wfmt!("{} · by {}", f.body, f.datum))));
     }
     for f in m.stitches() {
-        out.push(Item::def(m, Def::Stitch, &f.name, Some(format!("on {}", f.surface))));
+        out.push(Item::def(m, Def::Stitch, &f.name, Some(crate::words::wfmt!("on {}", f.surface))));
     }
     for f in m.defeatures() {
         let n = f.features.len();
-        out.push(Item::def(m, Def::Defeature, &f.name, Some(format!("{n} feature{}", if n == 1 { "" } else { "s" }))));
+        out.push(Item::def(m, Def::Defeature, &f.name, Some(crate::words::wfmt!("{n} feature{}", if n == 1 { "" } else { "s" }))));
     }
     out
 }
@@ -1289,9 +1289,9 @@ fn mesh_items(m: &Model) -> Vec<Item> {
             Item::def(m, Def::SizeControl, n, Some(on.into()))
         })
         .collect();
-    out.extend(m.mesh_plans().iter().map(|(n, p)| Item::def(m, Def::MeshPlan, n, Some(format!("for {}", p.body)))));
+    out.extend(m.mesh_plans().iter().map(|(n, p)| Item::def(m, Def::MeshPlan, n, Some(crate::words::wfmt!("for {}", p.body)))));
     out.extend(m.relaxations().iter().map(|(n, r)| {
-        let note = if r.bodies.is_empty() { None } else { Some(format!("on {}", r.bodies.join(", "))) };
+        let note = if r.bodies.is_empty() { None } else { Some(crate::words::wfmt!("on {}", r.bodies.join(", "))) };
         Item::def(m, Def::Relaxation, n, note)
     }));
     out
@@ -1316,7 +1316,7 @@ fn group_items(m: &Model, key: &str, kinds: &[Def]) -> Vec<Item> {
         for name in kind.names(m) {
             let note = match kind {
                 Def::Spring => m.spring(&name).map(|s| s.kind().to_string()),
-                Def::InitialField => m.initial_field(&name).map(|f| format!("initial {}", f.kind())),
+                Def::InitialField => m.initial_field(&name).map(|f| crate::words::wfmt!("initial {}", f.kind())),
                 _ => None,
             };
             out.push(Item::def(m, *kind, &name, note));
@@ -1327,7 +1327,7 @@ fn group_items(m: &Model, key: &str, kinds: &[Def]) -> Vec<Item> {
             if let fieldcraft_model::Procedure::ExplicitDynamic(e) = &s.procedure {
                 for (index, w) in e.rigid_walls.iter().enumerate() {
                     let target = Target::RigidWall { step: s.name.clone(), index };
-                    out.push(Item::new(target, "interaction.rigid_wall", format!("Rigid wall on {} ({})", w.set, s.name), None));
+                    out.push(Item::new(target, "interaction.rigid_wall", crate::words::wfmt!("Rigid wall on {} ({})", w.set, s.name), None));
                 }
             }
         }
@@ -1342,8 +1342,10 @@ fn saved_items(app: &ModelApp) -> Vec<Item> {
         let note = (view.current.as_deref() == Some(v.name.as_str())).then(|| "shown".to_string());
         Item::new(Target::View(v.name.clone()), "ui.views", &v.name, note)
     });
-    let renders =
-        view.renders.iter().map(|r| Item::new(Target::Render(r.name.clone()), "results.export.vtu", &r.name, Some(format!("of {}", r.view))));
+    let renders = view
+        .renders
+        .iter()
+        .map(|r| Item::new(Target::Render(r.name.clone()), "results.export.vtu", &r.name, Some(crate::words::wfmt!("of {}", r.view))));
     views.chain(renders).collect()
 }
 
@@ -1393,7 +1395,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                 fold: Some(open(app, "geometry")),
                 eye: Some(app.ui.show_geometry),
                 icon: Some("geometry.open"),
-                label: "Geometry",
+                label: crate::words::ts("Geometry"),
                 node: Some("geometry"),
                 note: Some(format!("{}", bodies + surfaces.len())),
                 mark,
@@ -1413,7 +1415,13 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                     app,
                     ui,
                     egui::Id::unique("fc_row_design"),
-                    &Row { depth: 2, icon: Some("geometry.open"), label: &label, note: Some(format!("{bodies} bodies")), ..Default::default() },
+                    &Row {
+                        depth: 2,
+                        icon: Some("geometry.open"),
+                        label: &label,
+                        note: Some(crate::words::wfmt!("{bodies} bodies")),
+                        ..Default::default()
+                    },
                 );
                 for (i, b) in d.bodies.iter().enumerate() {
                     let row = Row { depth: 3, icon: Some("geometry.bodies"), label: &b.name, ..Default::default() };
@@ -1443,7 +1451,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                 fold: Some(open(app, "mesh")),
                 eye: Some(app.ui.show_mesh),
                 icon: Some("mesh.tet.generate"),
-                label: "Mesh",
+                label: crate::words::ts("Mesh"),
                 node: Some("mesh"),
                 note: Some(format!("{elements}")),
                 mark,
@@ -1475,7 +1483,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                     depth: 2,
                     eye: Some(app.ui.show_nodes),
                     icon: Some("mesh.node.add"),
-                    label: "Nodes",
+                    label: crate::words::ts("Nodes"),
                     note: Some(format!("{nodes}")),
                     ..Default::default()
                 },
@@ -1508,7 +1516,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                         depth: 2,
                         fold: Some(open(app, "seeds")),
                         icon: Some("mesh.seed.edge"),
-                        label: "Seeds",
+                        label: crate::words::ts("Seeds"),
                         note: Some(format!("{}", seeds.len())),
                         ..Default::default()
                     },
@@ -1535,6 +1543,8 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
         if !shown(app, &stages, key) {
             continue;
         }
+        // The const keeps the English label; the tree reads it in the thread's language.
+        let label = crate::words::ts(label);
         let items = group_items(&app.session.model, key, kinds);
         let icon = kinds.first().map(|k| k.icon());
         let eye = eye_flag(&mut app.ui, key).map(|v| *v);
@@ -1584,7 +1594,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
                 depth: 1,
                 fold: Some(open(app, "results")),
                 icon: Some("results.contour"),
-                label: "Results",
+                label: crate::words::ts("Results"),
                 node: Some("results"),
                 note: Some(format!("{}", steps.len())),
                 dim: steps.is_empty(),
@@ -1598,7 +1608,7 @@ fn rows(app: &mut ModelApp, ui: &mut egui::Ui, acts: &mut Vec<Act>) {
         }
         if open(app, "results") {
             for (step, current) in steps {
-                let label = if current { step.clone() } else { format!("{step} (stale)") };
+                let label = if current { step.clone() } else { crate::words::wfmt!("{step} (stale)") };
                 let selected = displayed.as_deref() == Some(step.as_str());
                 let r = draw_row(
                     app,

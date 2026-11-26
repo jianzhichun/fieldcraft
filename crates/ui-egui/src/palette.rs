@@ -110,7 +110,7 @@ fn submit_line(app: &mut ModelApp, line: &str) {
                 Ok(p) => {
                     let _ = app.run(id, p);
                 }
-                Err(e) => app.set_status(format!("the parameters must be JSON: {e}"), true),
+                Err(e) => app.set_status(crate::words::wfmt!("the parameters must be JSON: {e}"), true),
             }
         }
         return;
@@ -119,7 +119,7 @@ fn submit_line(app: &mut ModelApp, line: &str) {
         Some(h) => {
             let _ = app.start(h.id);
         }
-        None => app.set_status(format!("no command matches `{line}`"), true),
+        None => app.set_status(crate::words::wfmt!("no command matches `{line}`"), true),
     }
 }
 
@@ -186,11 +186,11 @@ pub fn popup(app: &mut ModelApp, ctx: &egui::Context) {
         kit::CommandSearch::sheet(ui, width, 1.0, typed, |ui| {
             egui::ScrollArea::vertical().id_salt("fc_search_results").max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
                 if typed {
-                    let text = format!("Run {}", query.trim());
+                    let text = crate::words::wfmt!("Run {}", query.trim());
                     let mut row = kit::MenuItem::new("search:run_typed", &text, "");
-                    row.shortcut = "Enter";
+                    row.shortcut = crate::words::ts("Enter");
                     row.highlighted = true;
-                    if row.search_row(ui, "", "Runs the command with these parameters", None).clicked() {
+                    if row.search_row(ui, "", crate::words::ts("Runs the command with these parameters"), None).clicked() {
                         run_typed = true;
                     }
                 }
@@ -202,8 +202,8 @@ pub fn popup(app: &mut ModelApp, ctx: &egui::Context) {
                     let missing = app.unavailable(h.id);
                     let enabled = h.soon.is_none() && missing.is_none();
                     let path = match (h.soon, &missing) {
-                        (Some(m), _) => format!("{} · soon ({m})", h.place),
-                        (None, Some(u)) => u.missing.first().map_or_else(|| h.place.clone(), |m| format!("needs {}", m.0.what())),
+                        (Some(m), _) => crate::words::wfmt!("{} · soon ({m})", h.place),
+                        (None, Some(u)) => u.missing.first().map_or_else(|| h.place.clone(), |m| crate::words::wfmt!("needs {}", m.0.what())),
                         (None, None) => h.place.clone(),
                     };
                     let mut row = kit::MenuItem::new(h.id, h.label, h.icon);

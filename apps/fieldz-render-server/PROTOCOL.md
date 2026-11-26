@@ -105,7 +105,7 @@ again whenever its own light/dark switch moves.
 | field | type | meaning |
 |---|---|---|
 | `id` | number | The caller's id; the reply carries it. |
-| `method` | string | a control method (`engine.execute`, `engine.script`, `engine.commands`, `job.status`, `job.wait`, `job.cancel`, `ui.*`, …), or `engine.batch` / `ui.theme` / `ui.operations` (this server's own). |
+| `method` | string | a control method (`engine.execute`, `engine.script`, `engine.commands`, `job.status`, `job.wait`, `job.cancel`, `ui.*`, …), or `engine.batch` / `ui.theme` / `ui.language` / `ui.operations` (this server's own). |
 | `params` | object | the method's parameters, as `fieldcraft_ui_egui::control` defines them (or as below). |
 | `op` | string, optional | the turn/operation this call belongs to (`"turn/step"`); `ui.operations {cancel}` uses it. Default `"call/<id>"`. |
 
@@ -128,6 +128,15 @@ completed step's `result` value.
 
 **`ui.theme`** (new here): answers `{"ok":true,"result":{"dark":bool}}` with the theme in
 effect — a fixed `--theme`, or the one the last `theme` message set.
+
+**`ui.language`** (new here): `{"lang": "zh"|"en", "probe"?: true}`. It sets the interface
+language and answers `{"ok":true,"result":{"lang":"zh"|"en"}}`; the next frame is `full` and every
+label reads in it. The server starts in `--lang` (or `FIELDCRAFT_LANG`, else `zh`); `en` keeps the
+English interface. With `"probe": true` the result also carries a sample for tests:
+`{"lang":"zh","catalogue":{"ui.hide":"隐藏",…,"cap.mesh.tet.generate":"四面体网格"},
+"chrome":{"Solve":"求解","File":"文件",…}}` — five catalogue ids (one of them the `cap.<id>` of a
+ribbon label) and five chrome literals. An unknown `lang` is answered `{"ok":false,"error":…}`
+and leaves the language as it was.
 
 **`ui.operations`** (new here): `{"op": name?, "cancel": name|"agent"}`.
 

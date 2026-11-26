@@ -48,7 +48,8 @@ pub fn show(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect, t: &Tokens) {
     probe(app, &plot, &painter, rect, covered, &placed, t);
     let mut focus = None;
     for (i, (line, node)) in extremes.into_iter().enumerate() {
-        let tip = if plot.is_fluid() { "Centre this field extreme".into() } else { format!("Show and probe node {node}") };
+        let tip =
+            if plot.is_fluid() { crate::words::ts("Centre this field extreme").into() } else { crate::words::wfmt!("Show and probe node {node}") };
         let r = ui.interact(line, ui.scope_id().with(("fc_legend_extreme", i)), egui::Sense::click()).backing_on_hover_text(tip);
         if r.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -96,27 +97,27 @@ pub fn legend_rect(plot: &Plot, painter: &egui::Painter, view: Rect, rect: Rect,
 /// The legend's title: the field with its unit (a mode shape normalised), or the shape drawn.
 fn title(plot: &Plot) -> String {
     if plot.unavailable {
-        return plot.view.contour.map_or_else(|| "Field unavailable".into(), |f| f.title(&plot.result, &plot.units));
+        return plot.view.contour.map_or_else(|| crate::words::ts("Field unavailable").into(), |f| f.title(&plot.result, &plot.units));
     }
     match (&plot.contour, plot.mode()) {
         (Some(l), _) => l.field.title(&plot.result, &plot.units),
-        (None, Some(_)) => "Mode shape (normalised)".into(),
-        (None, None) if plot.is_fluid() => plot.view.contour.map_or_else(|| "Flow".into(), |f| f.title(&plot.result, &plot.units)),
-        (None, None) => "Deformed shape".into(),
+        (None, Some(_)) => crate::words::ts("Mode shape (normalised)").into(),
+        (None, None) if plot.is_fluid() => plot.view.contour.map_or_else(|| crate::words::ts("Flow").into(), |f| f.title(&plot.result, &plot.units)),
+        (None, None) => crate::words::ts("Deformed shape").into(),
     }
 }
 
 /// The deformation line: its scale, and whether it is automatic or true.
 fn deformation(plot: &Plot) -> String {
     if !plot.view.deformed {
-        return "Undeformed".into();
+        return crate::words::ts("Undeformed").into();
     }
     let how = match plot.view.scale {
-        _ if plot.scale == 1.0 && true_scale(&plot.result) => " (true scale)",
-        None => " (auto)",
+        _ if plot.scale == 1.0 && true_scale(&plot.result) => crate::words::ts(" (true scale)"),
+        None => crate::words::ts(" (auto)"),
         Some(_) => "",
     };
-    format!("Deformation × {}{how}", number(plot.scale))
+    crate::words::wfmt!("Deformation × {}{how}", number(plot.scale))
 }
 
 /// The contour's Max and Min lines.
@@ -127,12 +128,12 @@ fn extreme_lines(plot: &Plot) -> Option<[(String, u32); 2]> {
     let at = |node: u32| match plot.extreme_position(node).filter(|_| plot.is_fluid()) {
         Some(p) => {
             let at = fieldcraft_engine::results::shown_all(Quantity::Length, [p.x, p.y, p.z], &plot.units);
-            format!("at {}", with_unit(components(&at, 0.0), unit_of(Quantity::Length, &plot.units).as_deref()))
+            crate::words::wfmt!("at {}", with_unit(components(&at, 0.0), unit_of(Quantity::Length, &plot.units).as_deref()))
         }
-        None => format!("at node {node}"),
+        None => crate::words::wfmt!("at node {node}"),
     };
     let line = |what: &str, (node, v): (u32, f64)| (format!("{what} {} {}", with_unit(number_in(v, scale), unit.as_deref()), at(node)), node);
-    Some([line("Max", l.max), line("Min", l.min)])
+    Some([line(crate::words::ts("Max"), l.max), line(crate::words::ts("Min"), l.min)])
 }
 
 /// The legend's frame of `n`, `k` counted from 0 like the slider and `results.frame`: a time
@@ -140,9 +141,9 @@ fn extreme_lines(plot: &Plot) -> Option<[(String, u32); 2]> {
 /// n − 1` at its load factor (increment 0 the unloaded state).
 fn frame_text(increments: bool, k: usize, n: usize, at: f64, time_unit: Option<&str>) -> String {
     if increments {
-        format!(", increment {k} of {}: load factor {}", n.saturating_sub(1), number(at))
+        crate::words::wfmt!(", increment {k} of {}: load factor {}", n.saturating_sub(1), number(at))
     } else {
-        format!(", frame {k} of {n}: t = {}", with_unit(number(at), time_unit))
+        crate::words::wfmt!(", frame {k} of {n}: t = {}", with_unit(number(at), time_unit))
     }
 }
 
@@ -151,32 +152,33 @@ fn frame_text(increments: bool, k: usize, n: usize, at: f64, time_unit: Option<&
 fn legend_layout(plot: &Plot, painter: &egui::Painter, view: Rect, rect: Rect, bar: Option<Rect>, t: &Tokens) -> Legend {
     let mut lines: Vec<(String, Color32)> = Vec::new();
     let title = title(plot);
-    let mut step = format!("Step {}", plot.view.step);
+    let mut step = crate::words::wfmt!("Step {}", plot.view.step);
     if let Some((mode, value)) = plot.mode() {
-        step.push_str(&format!(", mode {mode}: {value}"));
+        step.push_str(&crate::words::wfmt!(", mode {mode}: {value}"));
     }
     if let Some((k, at, n)) = plot.frame() {
         let increments = matches!(plot.result.kind(), Kind::Static(_));
         step.push_str(&frame_text(increments, k, n, at, unit_of(Quantity::Time, &plot.units).as_deref()));
     }
     if let Some(a) = plot.amplitude {
-        let what = if matches!(plot.result.kind(), Kind::Frequency(_)) { "Mode amplitude" } else { "Proportional load" };
-        lines.push((format!("{what} × {} (display interpolation)", number(a)), t.text_dim));
+        let what =
+            if matches!(plot.result.kind(), Kind::Frequency(_)) { crate::words::ts("Mode amplitude") } else { crate::words::ts("Proportional load") };
+        lines.push((crate::words::wfmt!("{what} × {} (display interpolation)", number(a)), t.text_dim));
     }
     lines.push((step, t.overlay_text));
     if !plot.is_fluid() {
         lines.push((deformation(plot), t.text_dim));
     }
     if plot.unavailable {
-        lines.push(("Field not saved at this increment".into(), t.warm));
-        lines.push(("No stress output, or past the step's field cap".into(), t.warm));
+        lines.push((crate::words::ts("Field not saved at this increment").into(), t.warm));
+        lines.push((crate::words::ts("No stress output, or past the step's field cap").into(), t.warm));
     }
     if let Some(l) = plot.contour.as_ref().filter(|_| plot.view.range_min.is_some() || plot.view.range_max.is_some()) {
         let scale = l.max.1.abs().max(l.min.1.abs());
-        lines.push((format!("Legend clamped to {} … {}", number_in(l.bands.min, scale), number_in(l.bands.max, scale)), t.warm));
+        lines.push((crate::words::wfmt!("Legend clamped to {} … {}", number_in(l.bands.min, scale), number_in(l.bands.max, scale)), t.warm));
     }
     if plot.stale {
-        lines.push(("Stale: the model changed since this step was solved".into(), t.warm));
+        lines.push((crate::words::ts("Stale: the model changed since this step was solved").into(), t.warm));
     }
     let k = solidcraft_theme::Tokens::get();
     let origin = rect.left_top() + vec2(k.space_12, k.space_12);
@@ -348,7 +350,7 @@ fn markers(app: &ModelApp, plot: &Plot, painter: &egui::Painter, rect: Rect, leg
     let scale = l.max.1.abs().max(l.min.1.abs());
     let (high, low) = (t.contour[4], t.contour[0]);
     // The Min label keeps off the Max label when the two cells are close on screen.
-    for (what, (node, v), color) in [("Max", l.max, high), ("Min", l.min, low)] {
+    for (what, (node, v), color) in [(crate::words::ts("Max"), l.max, high), (crate::words::ts("Min"), l.min, low)] {
         let Some(at) = plot.extreme_position(node).and_then(|w| crate::viewport::to_screen(app, w)) else { continue };
         if !rect.contains(at) || legend.is_some_and(|l| l.contains(at)) {
             continue;
@@ -394,20 +396,20 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     let mut run: Vec<(&'static str, Value)> = Vec::new();
     let mut export: Option<Value> = None;
     let steps: Vec<(String, bool)> = app.session.result_steps().map(|(n, c)| (n.to_string(), c)).collect();
-    kit::row(ui, "Step", |ui| {
+    kit::row(ui, crate::words::ts("Step"), |ui| {
         kit::bounded_dropdown_menu(ui, "fc_results_step", &plot.view.step, ui.available_width(), |ui| {
             for (name, current) in &steps {
-                let label = if *current { name.clone() } else { format!("{name} (stale)") };
+                let label = if *current { name.clone() } else { crate::words::wfmt!("{name} (stale)") };
                 if ui.selectable_label(*name == plot.view.step, label).clicked() && *name != plot.view.step {
                     run.push(("results.deformed", json!({"step": name})));
                 }
             }
         })
     });
-    let shown = plot.view.contour.map_or("None", Field::label);
-    kit::row(ui, "Contours", |ui| {
+    let shown = plot.view.contour.map_or(crate::words::ts("None"), Field::label);
+    kit::row(ui, crate::words::ts("Contours"), |ui| {
         kit::bounded_dropdown_menu(ui, "fc_results_field", shown, ui.available_width(), |ui| {
-            if ui.selectable_label(plot.view.contour.is_none(), "None").clicked() {
+            if ui.selectable_label(plot.view.contour.is_none(), crate::words::ts("None")).clicked() {
                 run.push(("results.contour", json!({"field": "none"})));
             }
             for f in Field::available(&plot.result) {
@@ -420,13 +422,14 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     // The legend's range: each end follows the field (Auto) or is clamped, e.g. below a
     // singular peak (#191).
     if let Some(l) = &plot.contour {
-        for (label, key, set, value) in
-            [("Legend max", "max", plot.view.range_max, l.bands.max), ("Legend min", "min", plot.view.range_min, l.bands.min)]
-        {
+        for (label, key, set, value) in [
+            (crate::words::ts("Legend max"), "max", plot.view.range_max, l.bands.max),
+            (crate::words::ts("Legend min"), "min", plot.view.range_min, l.bands.min),
+        ] {
             kit::row(ui, label, |ui| {
                 let mut auto = set.is_none();
-                let tip = format!("Follow the field's {}; untick to clamp the legend", if key == "max" { "maximum" } else { "minimum" });
-                if kit::checkbox(ui, "Auto", &mut auto).backing_on_hover_text(tip).changed() {
+                let tip = crate::words::wfmt!("Follow the field's {}; untick to clamp the legend", if key == "max" { "maximum" } else { "minimum" });
+                if kit::checkbox(ui, crate::words::ts("Auto"), &mut auto).backing_on_hover_text(tip).changed() {
                     run.push(("results.contour", legend_params(plot, key, if auto { json!("auto") } else { json!(value) })));
                 }
                 // The clamp is stored in SI; the legend shows the display units.
@@ -443,11 +446,13 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     } else {
         deformation_rows(plot, ui, &mut run);
     }
-    kit::row(ui, "Show", |ui| {
+    kit::row(ui, crate::words::ts("Show"), |ui| {
         if plot.contour.is_some() {
-            kit::checkbox(ui, "Max/Min", &mut app.ui.result_extremes).backing_on_hover_text("Mark the nodes of the largest and smallest value");
+            kit::checkbox(ui, "Max/Min", &mut app.ui.result_extremes)
+                .backing_on_hover_text(crate::words::ts("Mark the nodes of the largest and smallest value"));
         }
-        kit::checkbox(ui, "Loads & BCs", &mut app.ui.result_symbols).backing_on_hover_text("The symbols of the step's boundary conditions and loads");
+        kit::checkbox(ui, crate::words::ts("Loads & BCs"), &mut app.ui.result_symbols)
+            .backing_on_hover_text(crate::words::ts("The symbols of the step's boundary conditions and loads"));
     });
     if let Kind::Explicit(e) = plot.result.kind() {
         kit::divider(ui, "fc_results_explicit");
@@ -455,7 +460,7 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     } else if let Some((k, at, n)) = plot.frame().filter(|_| plot.is_fluid()) {
         // A fluid step: its frames, the slice, the obstacles and the streamlines following.
         kit::divider(ui, "fc_results_flow");
-        kit::row(ui, "Frame", |ui| {
+        kit::row(ui, crate::words::ts("Frame"), |ui| {
             let mut frame = k;
             if kit::slider(
                 ui,
@@ -468,8 +473,8 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
                 run.push(("results.frame", json!({"frame": frame})));
             }
             let mut animate = plot.view.animate;
-            if kit::checkbox(ui, "Animate", &mut animate)
-                .backing_on_hover_text("Play the frames from the start-up transient to the settled flow")
+            if kit::checkbox(ui, crate::words::ts("Animate"), &mut animate)
+                .backing_on_hover_text(crate::words::ts("Play the frames from the start-up transient to the settled flow"))
                 .changed()
             {
                 run.push(("results.animate", json!({"on": animate})));
@@ -483,7 +488,7 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     } else if let Some((k, factor, n)) = plot.frame().filter(|_| matches!(plot.result.kind(), Kind::Static(_))) {
         // A nonlinear static step: its increments, the deformed shape following the slider.
         kit::divider(ui, "fc_results_increments");
-        kit::row(ui, "Increment", |ui| {
+        kit::row(ui, crate::words::ts("Increment"), |ui| {
             let mut frame = k;
             if kit::slider(
                 ui,
@@ -496,10 +501,10 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
                 run.push(("results.frame", json!({"frame": frame})));
             }
         });
-        kit::status_line(ui, &format!("load factor {}", number(factor)), kit::StatusTone::Dim);
+        kit::status_line(ui, &crate::words::wfmt!("load factor {}", number(factor)), kit::StatusTone::Dim);
     } else if let Kind::Frequency(f) = plot.result.kind() {
         kit::divider(ui, "fc_results_modes");
-        kit::text(ui, "Modes", kit::Text::Heading("fc_results_modes"));
+        kit::text(ui, crate::words::ts("Modes"), kit::Text::Heading("fc_results_modes"));
         egui::ScrollArea::vertical().id_salt("fc_results_modes").max_height(kit::row_height() * 5.0).show(ui, |ui| {
             // Justified: the selected mode highlights across the panel, not only behind its text.
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
@@ -524,13 +529,16 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     if matches!(plot.result.kind(), Kind::Static(_)) {
         kit::divider(ui, "fc_results_reactions");
         ui.horizontal(|ui| {
-            if kit::button(ui, "Reaction sums", kit::Button::Normal)
-                .backing_on_hover_text("Reaction force and moment per boundary-condition set")
+            if kit::button(ui, crate::words::ts("Reaction sums"), kit::Button::Normal)
+                .backing_on_hover_text(crate::words::ts("Reaction force and moment per boundary-condition set"))
                 .clicked()
             {
                 run.push(("results.reactions", json!({"step": plot.view.step})));
             }
-            if kit::button(ui, "Export CSV…", kit::Button::Normal).backing_on_hover_text("Write the reaction sums to a CSV file").clicked() {
+            if kit::button(ui, crate::words::ts("Export CSV…"), kit::Button::Normal)
+                .backing_on_hover_text(crate::words::ts("Write the reaction sums to a CSV file"))
+                .clicked()
+            {
                 export = Some(json!({"what": "reactions", "step": plot.view.step}));
             }
         });
@@ -566,7 +574,7 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     if save_view {
         // The form starts with a free name and the viewport's camera.
         let taken: Vec<&str> = app.session.view.views.iter().map(|v| v.name.as_str()).collect();
-        let name = (1..).map(|i| format!("View {i}")).find(|n| !taken.contains(&n.as_str())).unwrap_or_default();
+        let name = (1..).map(|i| crate::words::wfmt!("View {i}")).find(|n| !taken.contains(&n.as_str())).unwrap_or_default();
         let camera = fieldcraft_engine::view::aim_of(&app.cam, &app.session).json();
         app.open_form("view.save", json!({"name": name, "camera": camera}));
     }
@@ -577,14 +585,14 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
 fn views_row(app: &ModelApp, ui: &mut egui::Ui, run: &mut Vec<(&'static str, Value)>) -> bool {
     let views = &app.session.view.views;
     let current = app.session.view.current.as_deref();
-    kit::row(ui, "Views", |ui| {
-        let shown = current.unwrap_or(if views.is_empty() { "None saved" } else { "Choose…" });
+    kit::row(ui, crate::words::ts("Views"), |ui| {
+        let shown = current.unwrap_or(if views.is_empty() { crate::words::ts("None saved") } else { crate::words::ts("Choose…") });
         ui.add_enabled_ui(!views.is_empty(), |ui| {
             kit::bounded_dropdown_menu(ui, "fc_results_views", shown, ui.available_width(), |ui| {
                 for v in views {
                     if ui
                         .selectable_label(current == Some(v.name.as_str()), &v.name)
-                        .backing_on_hover_text("Show this view: its camera and results display")
+                        .backing_on_hover_text(crate::words::ts("Show this view: its camera and results display"))
                         .clicked()
                     {
                         run.push(("view.restore", json!({"name": v.name})));
@@ -593,8 +601,8 @@ fn views_row(app: &ModelApp, ui: &mut egui::Ui, run: &mut Vec<(&'static str, Val
             });
         });
     });
-    kit::button(ui, "Save View…", kit::Button::Normal)
-        .backing_on_hover_text("Keep the camera and this results display as a named view, saved with the model")
+    kit::button(ui, crate::words::ts("Save View…"), kit::Button::Normal)
+        .backing_on_hover_text(crate::words::ts("Keep the camera and this results display as a named view, saved with the model"))
         .clicked()
 }
 
@@ -607,21 +615,21 @@ fn column_number_field(ui: &mut egui::Ui, value: &mut f64, range: std::ops::Rang
 
 /// The deformation rows of the results grid: Deformed (with its scale) and Animate.
 fn deformation_rows(plot: &Plot, ui: &mut egui::Ui, run: &mut Vec<(&'static str, Value)>) {
-    kit::row(ui, "Deformed", |ui| {
+    kit::row(ui, crate::words::ts("Deformed"), |ui| {
         let mut deformed = plot.view.deformed;
-        if kit::checkbox(ui, "Show", &mut deformed).backing_on_hover_text("Draw the deformed shape").changed() {
+        if kit::checkbox(ui, crate::words::ts("Show"), &mut deformed).backing_on_hover_text(crate::words::ts("Draw the deformed shape")).changed() {
             run.push(("results.deformed", json!({"show": deformed})));
         }
     });
     // Its own row, so Auto lines up with the legend's.
-    kit::row(ui, "Scale", |ui| {
+    kit::row(ui, crate::words::ts("Scale"), |ui| {
         let mut auto = plot.view.scale.is_none();
         let tip = if true_scale(&plot.result) {
-            "Draw the displacements at true scale (they are large already)"
+            crate::words::ts("Draw the displacements at true scale (they are large already)")
         } else {
-            "Scale the largest displacement to a tenth of the model"
+            crate::words::ts("Scale the largest displacement to a tenth of the model")
         };
-        if kit::checkbox(ui, "Auto", &mut auto).backing_on_hover_text(tip).changed() {
+        if kit::checkbox(ui, crate::words::ts("Auto"), &mut auto).backing_on_hover_text(tip).changed() {
             run.push(("results.deformed", json!({"scale": if auto { json!("auto") } else { json!(plot.scale) }})));
         }
         // The scale ticking Deformed draws with, also while it is off.
@@ -630,15 +638,15 @@ fn deformation_rows(plot: &Plot, ui: &mut egui::Ui, run: &mut Vec<(&'static str,
         let field = ui.add_enabled_ui(plot.view.deformed, |ui| {
             column_number_field(ui, &mut scale, 0.0..=fieldcraft_engine::results::MAX_DEFORMATION_SCALE, speed, "×")
         });
-        if field.inner.backing_on_hover_text("The scale the displacements are drawn at").changed() {
+        if field.inner.backing_on_hover_text(crate::words::ts("The scale the displacements are drawn at")).changed() {
             run.push(("results.deformed", json!({"scale": scale})));
         }
     });
-    kit::row(ui, "Animate", |ui| {
+    kit::row(ui, crate::words::ts("Animate"), |ui| {
         let mut animate = plot.view.animate;
         if kit::checkbox(ui, "", &mut animate)
             .backing_on_hover_text(
-                "Animate shape and contours. Linear static results interpolate a proportional load; nonlinear steps play their converged increments with their own stresses, explicit steps play saved fields.",
+                crate::words::ts("Animate shape and contours. Linear static results interpolate a proportional load; nonlinear steps play their converged increments with their own stresses, explicit steps play saved fields."),
             )
             .changed()
         {
@@ -653,50 +661,59 @@ fn flow_rows(plot: &Plot, ui: &mut egui::Ui, run: &mut Vec<(&'static str, Value)
     use fieldcraft_engine::flow::{Axis, slice_position};
     let (Kind::Fluid(f), Some(flow)) = (plot.result.kind(), plot.flow.as_ref()) else { return };
     if plot.view.contour == Some(Field::WallHeatFlux) {
-        kit::row(ui, "Wall heat", |ui| kit::text(ui, "Positive into wall; face average", kit::Text::Cell));
+        kit::row(ui, crate::words::ts("Wall heat"), |ui| kit::text(ui, crate::words::ts("Positive into wall; face average"), kit::Text::Cell));
         if plot.contour.is_none() {
-            kit::row(ui, "History", |ui| kit::text(ui, "No wall heat recorded at this frame", kit::Text::Cell));
+            kit::row(ui, crate::words::ts("History"), |ui| kit::text(ui, crate::words::ts("No wall heat recorded at this frame"), kit::Text::Cell));
         }
     }
     let view = &flow.view;
-    kit::row(ui, "Slice", |ui| {
+    kit::row(ui, crate::words::ts("Slice"), |ui| {
         if plot.view.contour == Some(Field::WallHeatFlux) {
-            kit::text(ui, "Hidden for wall heat", kit::Text::Cell);
+            kit::text(ui, crate::words::ts("Hidden for wall heat"), kit::Text::Cell);
             return;
         }
-        let shown = view.slice.as_ref().map_or("None", |s| s.axis.id());
-        kit::bounded_dropdown_menu(ui, "fc_results_slice", &format!("Normal {}", shown.to_uppercase()), ui.available_width(), |ui| {
-            if ui.selectable_label(view.slice.is_none(), "None").clicked() {
+        let shown = view.slice.as_ref().map_or(crate::words::ts("None"), |s| s.axis.id());
+        kit::bounded_dropdown_menu(ui, "fc_results_slice", &crate::words::wfmt!("Normal {}", shown.to_uppercase()), ui.available_width(), |ui| {
+            if ui.selectable_label(view.slice.is_none(), crate::words::ts("None")).clicked() {
                 run.push(("results.slice", json!({"axis": "none"})));
             }
             for a in Axis::ALL {
-                if ui.selectable_label(view.slice.as_ref().is_some_and(|s| s.axis == a), format!("Normal {}", a.id().to_uppercase())).clicked() {
+                if ui
+                    .selectable_label(view.slice.as_ref().is_some_and(|s| s.axis == a), crate::words::wfmt!("Normal {}", a.id().to_uppercase()))
+                    .clicked()
+                {
                     run.push(("results.slice", json!({"axis": a.id()})));
                 }
             }
         });
     });
     if let Some(s) = view.slice.as_ref().filter(|_| plot.view.contour != Some(Field::WallHeatFlux)) {
-        kit::row(ui, "Position", |ui| {
+        kit::row(ui, crate::words::ts("Position"), |ui| {
             let length = |m: f64| shown_in(Quantity::Length, m, &plot.units);
             let (lo, hi) = (length(flow.grid.start(s.axis.index())), length(flow.grid.end(s.axis.index())));
             let mut at = length(slice_position(f, s));
             let speed = (hi - lo).abs().max(MIN_DRAG_SPAN) * 0.002;
-            if column_number_field(ui, &mut at, lo..=hi, speed, "").backing_on_hover_text("Where the slice crosses its axis").changed() {
+            if column_number_field(ui, &mut at, lo..=hi, speed, "")
+                .backing_on_hover_text(crate::words::ts("Where the slice crosses its axis"))
+                .changed()
+            {
                 run.push(("results.slice", json!({"position": at})));
             }
         });
     }
-    kit::row(ui, "Obstacles", |ui| {
+    kit::row(ui, crate::words::ts("Obstacles"), |ui| {
         let mut surface = view.surface;
-        if kit::checkbox(ui, "Coloured", &mut surface).backing_on_hover_text("Colour the part by the selected fluid field or wall heat").changed() {
+        if kit::checkbox(ui, crate::words::ts("Coloured"), &mut surface)
+            .backing_on_hover_text(crate::words::ts("Colour the part by the selected fluid field or wall heat"))
+            .changed()
+        {
             run.push(("results.surface", json!({"show": surface})));
         }
     });
-    kit::row(ui, "Streamlines", |ui| {
+    kit::row(ui, crate::words::ts("Streamlines"), |ui| {
         let mut on = view.streamlines.is_some();
         if kit::checkbox(ui, "", &mut on)
-            .backing_on_hover_text("Streamlines from the inlet, coloured by speed or temperature when selected")
+            .backing_on_hover_text(crate::words::ts("Streamlines from the inlet, coloured by speed or temperature when selected"))
             .changed()
         {
             run.push(("results.streamlines", json!({"show": on})));
@@ -704,16 +721,17 @@ fn flow_rows(plot: &Plot, ui: &mut egui::Ui, run: &mut Vec<(&'static str, Value)
         if let Some(sl) = &view.streamlines {
             if sl.seeds.is_some() {
                 // Given seeds (or a line of them): their number; `count` does not change them.
-                kit::text(ui, &format!("{} seeds", flow.seeds), kit::Text::Cell).backing_on_hover_text("The seeds the streamlines were given");
+                kit::text(ui, &crate::words::wfmt!("{} seeds", flow.seeds), kit::Text::Cell)
+                    .backing_on_hover_text(crate::words::ts("The seeds the streamlines were given"));
             } else {
                 let mut count = sl.count;
                 let field = kit::whole_number_field(ui, &mut count, 1..=fieldcraft_engine::flow::MAX_STREAMLINES, " seeds");
-                if field.backing_on_hover_text("Seeds on the inlet face, upstream of the obstacles").changed() {
+                if field.backing_on_hover_text(crate::words::ts("Seeds on the inlet face, upstream of the obstacles")).changed() {
                     run.push(("results.streamlines", json!({"count": count})));
                 }
                 if flow.seeds != sl.count as usize {
-                    kit::text(ui, &format!("{} traced", flow.seeds), kit::Text::Inline)
-                        .backing_on_hover_text("The seeds the grid across the inlet face fits");
+                    kit::text(ui, &crate::words::wfmt!("{} traced", flow.seeds), kit::Text::Inline)
+                        .backing_on_hover_text(crate::words::ts("The seeds the grid across the inlet face fits"));
                 }
             }
         }
@@ -724,23 +742,26 @@ fn flow_rows(plot: &Plot, ui: &mut egui::Ui, run: &mut Vec<(&'static str, Value)
 /// its Export CSV… is clicked.
 fn probed(app: &ModelApp, plot: &Plot, ui: &mut egui::Ui) -> Option<Value> {
     let Some(p) = app.probe.as_ref().filter(|p| p.step == plot.view.step && p.mode == plot.pick.mode && p.frame == plot.pick.frame) else {
-        kit::status_line(ui, "Click the model to probe a node", kit::StatusTone::Dim);
+        kit::status_line(ui, crate::words::ts("Click the model to probe a node"), kit::StatusTone::Dim);
         return None;
     };
-    kit::text(ui, &format!("Node {}", p.node), kit::Text::Heading("fc_results_probe"));
+    kit::text(ui, &crate::words::wfmt!("Node {}", p.node), kit::Text::Heading("fc_results_probe"));
     for (what, value) in &p.rows {
-        kit::row(ui, what, |ui| kit::copy_cell(ui, value, &format!("{what}: {value}"), false, "Copy the value"));
+        kit::row(ui, what, |ui| kit::copy_cell(ui, value, &format!("{what}: {value}"), false, crate::words::ts("Copy the value")));
     }
-    kit::button(ui, "Export CSV…", kit::Button::Normal).backing_on_hover_text("Write the node's results to a CSV file").clicked().then(|| {
-        let mut params = json!({"what": "probe", "step": p.step, "nodes": [p.node]});
-        if matches!(plot.result.kind(), Kind::Frequency(_)) {
-            params["mode"] = json!(p.mode);
-        }
-        if let Some(f) = p.frame {
-            params["frame"] = json!(f);
-        }
-        params
-    })
+    kit::button(ui, crate::words::ts("Export CSV…"), kit::Button::Normal)
+        .backing_on_hover_text(crate::words::ts("Write the node's results to a CSV file"))
+        .clicked()
+        .then(|| {
+            let mut params = json!({"what": "probe", "step": p.step, "nodes": [p.node]});
+            if matches!(plot.result.kind(), Kind::Frequency(_)) {
+                params["mode"] = json!(p.mode);
+            }
+            if let Some(f) = p.frame {
+                params["frame"] = json!(f);
+            }
+            params
+        })
 }
 
 /// An explicit step: a frame slider (the deformed shape and contours follow it) and the energy
@@ -749,7 +770,7 @@ fn probed(app: &ModelApp, plot: &Plot, ui: &mut egui::Ui) -> Option<Value> {
 fn explicit(ui: &mut egui::Ui, e: &ExplicitResult, plot: &Plot, t: &Tokens, run: &mut Vec<(&'static str, Value)>) {
     let time_unit = unit_of(Quantity::Time, &plot.units);
     if let Some((k, time, n)) = plot.frame() {
-        kit::row(ui, "Frame", |ui| {
+        kit::row(ui, crate::words::ts("Frame"), |ui| {
             let mut frame = k;
             if kit::slider(
                 ui,
@@ -769,13 +790,13 @@ fn explicit(ui: &mut egui::Ui, e: &ExplicitResult, plot: &Plot, t: &Tokens, run:
         return;
     }
     let series: [(&str, Color32, fn(&Energies) -> f64); 4] = [
-        ("Kinetic", t.accent, |e| e.kinetic),
-        ("Internal", t.ok, |e| e.internal),
-        ("Hourglass", t.warm, |e| e.hourglass),
-        ("External work", t.error, |e| e.external),
+        (crate::words::ts("Kinetic"), t.accent, |e| e.kinetic),
+        (crate::words::ts("Internal"), t.ok, |e| e.internal),
+        (crate::words::ts("Hourglass"), t.warm, |e| e.hourglass),
+        (crate::words::ts("External work"), t.error, |e| e.external),
     ];
     let energy_unit = unit_of(Quantity::Energy, &plot.units);
-    kit::text(ui, &titled("Energies", energy_unit.as_deref()), kit::Text::Heading("fc_results_energies"));
+    kit::text(ui, &titled(crate::words::ts("Energies"), energy_unit.as_deref()), kit::Text::Heading("fc_results_energies"));
     let (time, energy) = (|s: f64| shown_in(Quantity::Time, s, &plot.units), |j: f64| shown_in(Quantity::Energy, j, &plot.units));
     let lines: Vec<Line> = series
         .iter()
@@ -803,8 +824,8 @@ fn explicit(ui: &mut egui::Ui, e: &ExplicitResult, plot: &Plot, t: &Tokens, run:
     }
     // The values at the frame's time.
     let Some(at_now) = h.energies.get(nearest(now)) else { return };
-    let frame = plot.frame().map_or_else(String::new, |(k, ..)| format!(", frame {k}"));
-    kit::status_line(ui, &format!("At t = {}{frame}", with_unit(number(now), time_unit.as_deref())), kit::StatusTone::Dim);
+    let frame = plot.frame().map_or_else(String::new, |(k, ..)| crate::words::wfmt!(", frame {k}"));
+    kit::status_line(ui, &crate::words::wfmt!("At t = {}{frame}", with_unit(number(now), time_unit.as_deref())), kit::StatusTone::Dim);
     let k = solidcraft_theme::Tokens::get();
     for (name, color, f) in &series {
         // The series' line as its key beside the value, the name in the label colour: line
@@ -816,8 +837,8 @@ fn explicit(ui: &mut egui::Ui, e: &ExplicitResult, plot: &Plot, t: &Tokens, run:
             kit::text(ui, &with_unit(number_in(energy(f(at_now)), scale), energy_unit.as_deref()), kit::Text::Cell);
         });
     }
-    kit::row(ui, "Balance", |ui| {
-        kit::text(ui, &number(at_now.balance), kit::Text::Cell).backing_on_hover_text("The energy balance's relative error")
+    kit::row(ui, crate::words::ts("Balance"), |ui| {
+        kit::text(ui, &number(at_now.balance), kit::Text::Cell).backing_on_hover_text(crate::words::ts("The energy balance's relative error"))
     });
 }
 
@@ -912,25 +933,25 @@ pub fn xy_options(s: &fieldcraft_engine::Session, r: &fieldcraft_engine::StepRes
     let mut out = Vec::new();
     if let Kind::Frequency(f) = r.kind() {
         out.push(if f.buckling.is_some() {
-            ("Buckling load factor".to_string(), json!("load_factor"), None)
+            (crate::words::ts("Buckling load factor").to_string(), json!("load_factor"), None)
         } else {
-            ("Frequency".to_string(), json!("frequency"), None)
+            (crate::words::ts("Frequency").to_string(), json!("frequency"), None)
         });
     }
     if let Kind::Explicit(e) = r.kind() {
-        out.extend(xy::ENERGIES.iter().map(|n| (format!("Energy: {}", n.replace('_', " ")), json!({"energy": n}), None)));
+        out.extend(xy::ENERGIES.iter().map(|n| (crate::words::wfmt!("Energy: {}", n.replace('_', " ")), json!({"energy": n}), None)));
         out.extend(xy::HISTORIES.iter().map(|n| (n.replace('_', " "), json!({"history": n}), None)));
         for node in e.history.nodes.iter().take(8) {
             out.extend(
-                xy::NODE_QUANTITIES
-                    .iter()
-                    .map(|q| (format!("History node {node}: {}", q.replace('_', " ")), json!({"history_node": node, "quantity": q}), None)),
+                xy::NODE_QUANTITIES.iter().map(|q| {
+                    (crate::words::wfmt!("History node {node}: {}", q.replace('_', " ")), json!({"history_node": node, "quantity": q}), None)
+                }),
             );
         }
     }
     let linear = matches!(r.kind(), Kind::Static(st) if st.nonlinear.is_none());
     if !linear {
-        out.extend(xy::plottable(r).into_iter().map(|f| (format!("{} at a node", f.label()), json!({"field": f.id()}), None)));
+        out.extend(xy::plottable(r).into_iter().map(|f| (crate::words::wfmt!("{} at a node", f.label()), json!({"field": f.id()}), None)));
     }
     if matches!(r.kind(), Kind::Static(st) if st.nonlinear.is_some()) {
         let mut sets: Vec<&str> = s
@@ -944,8 +965,8 @@ pub fn xy_options(s: &fieldcraft_engine::Session, r: &fieldcraft_engine::StepRes
             for c in ["x", "y", "z"] {
                 let upper = c.to_uppercase();
                 let y = json!({"reaction": set, "component": c});
-                out.push((format!("Force–travel {upper}: {set}"), y.clone(), Some(json!({"displacement": set, "component": c}))));
-                out.push((format!("Reaction {upper} on {set}"), y, None));
+                out.push((crate::words::wfmt!("Force–travel {upper}: {set}"), y.clone(), Some(json!({"displacement": set, "component": c}))));
+                out.push((crate::words::wfmt!("Reaction {upper} on {set}"), y, None));
             }
         }
     }
@@ -958,14 +979,18 @@ pub fn xy_options(s: &fieldcraft_engine::Session, r: &fieldcraft_engine::StepRes
 fn xy_section(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens, run: &mut Vec<(&'static str, Value)>) -> Option<Value> {
     let step = plot.view.step.clone();
     let mut close = false;
-    kit::panel::header(ui, "results.xy", "XY Plot", || close = true);
+    kit::panel::header(ui, "results.xy", crate::words::ts("XY Plot"), || close = true);
     if close {
         app.xy = None;
         return None;
     }
     let options = xy_options(&app.session, &plot.result);
     if options.is_empty() {
-        kit::status_line(ui, "A linear static step has one state: plot a nonlinear static, explicit, heat or frequency step", kit::StatusTone::Dim);
+        kit::status_line(
+            ui,
+            crate::words::ts("A linear static step has one state: plot a nonlinear static, explicit, heat or frequency step"),
+            kit::StatusTone::Dim,
+        );
         return None;
     }
     let probed = app.probe.as_ref().filter(|p| p.step == step).map(|p| p.node);
@@ -982,7 +1007,7 @@ fn xy_section(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens, ru
         .unwrap_or_default();
     let shown = options.iter().find(|(_, y, x)| (y, x) == (&template.0, &template.1)).map_or("", |(l, ..)| l.as_str());
     let (mut picked, mut against) = template.clone();
-    kit::row(ui, "Quantity", |ui| {
+    kit::row(ui, crate::words::ts("Quantity"), |ui| {
         kit::bounded_dropdown_menu(ui, "fc_results_xy", shown, ui.available_width(), |ui| {
             for (label, y, x) in &options {
                 if ui.selectable_label((y, x) == (&template.0, &template.1), label).clicked() {
@@ -995,7 +1020,7 @@ fn xy_section(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens, ru
     let y = if picked.get("field").is_some() {
         let Some(node) = xy.node else {
             (xy.key, xy.series) = (None, None);
-            kit::status_line(ui, "Click the model to pick the node", kit::StatusTone::Dim);
+            kit::status_line(ui, crate::words::ts("Click the model to pick the node"), kit::StatusTone::Dim);
             return None;
         };
         let mut y = picked;
@@ -1065,7 +1090,10 @@ fn xy_section(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens, ru
         let at = |v: &[f64]| v.get(i).map_or("—".into(), |x| number(*x));
         kit::status_line(ui, &format!("{x_label} {}: {}", at(&xs), at(&ys)), kit::StatusTone::Dim);
     }
-    kit::button(ui, "Export CSV…", kit::Button::Normal).backing_on_hover_text("Write the series to a CSV file").clicked().then_some(params)
+    kit::button(ui, crate::words::ts("Export CSV…"), kit::Button::Normal)
+        .backing_on_hover_text(crate::words::ts("Write the series to a CSV file"))
+        .clicked()
+        .then_some(params)
 }
 
 impl ModelApp {
@@ -1082,15 +1110,19 @@ impl ModelApp {
 /// A heat step's balance: the heat each heat load carries in (negative: out), the prescribed
 /// temperatures' total, and what is left over (about 0 when steady).
 fn heat_flows(ui: &mut egui::Ui, flows: &Value, units: &fieldcraft_model::DisplaySystem) {
-    kit::text(ui, &titled("Heat flow into the body", unit_of(Quantity::Power, units).as_deref()), kit::Text::Heading("fc_results_heat"));
+    kit::text(
+        ui,
+        &titled(crate::words::ts("Heat flow into the body"), unit_of(Quantity::Power, units).as_deref()),
+        kit::Text::Heading("fc_results_heat"),
+    );
     let row = |ui: &mut egui::Ui, name: &str, v: Option<f64>| {
         kit::row(ui, name, |ui| kit::text(ui, &v.map_or("—".into(), number), kit::Text::Cell));
     };
     for l in flows["loads"].as_array().into_iter().flatten() {
         row(ui, &format!("{} ({})", l["name"].as_str().unwrap_or("?"), l["type"].as_str().unwrap_or("").replace('_', " ")), l["heat"].as_f64());
     }
-    row(ui, "Prescribed temperatures", flows["reactions"].as_f64());
-    row(ui, "Imbalance", flows["imbalance"].as_f64());
+    row(ui, crate::words::ts("Prescribed temperatures"), flows["reactions"].as_f64());
+    row(ui, crate::words::ts("Imbalance"), flows["imbalance"].as_f64());
 }
 
 /// Directional open-face transport from the displayed fluid frame.
@@ -1099,24 +1131,24 @@ fn port_transport(ui: &mut egui::Ui, f: &FluidResult, pick: fieldcraft_engine::r
     if !f.open_faces.contains(&true) {
         return;
     }
-    kit::section(ui, "fc_inlets_outlets", "Inlets and outlets", false, |ui| {
+    kit::section(ui, "fc_inlets_outlets", crate::words::ts("Inlets and outlets"), false, |ui| {
         let report = fieldcraft_engine::results::fluid_ports(f, frame, units);
         let Some(faces) = report["faces"].as_array() else {
-            kit::status_line(ui, report["error"].as_str().unwrap_or("Port fields unavailable"), kit::StatusTone::Error);
+            kit::status_line(ui, report["error"].as_str().unwrap_or(crate::words::ts("Port fields unavailable")), kit::StatusTone::Error);
             return;
         };
-        kit::status_line(ui, "From the displayed frame", kit::StatusTone::Dim);
+        kit::status_line(ui, crate::words::ts("From the displayed frame"), kit::StatusTone::Dim);
         let format =
             |v: &Value, quantity: &str| v.as_f64().map(|v| with_unit(number(v), report["units"][quantity].as_str())).unwrap_or_else(|| "—".into());
         for face in faces {
             let name = face["face"].as_str().unwrap_or("?");
             kit::text(ui, name, kit::Text::Heading("fc_port"));
             let rows: Vec<Vec<String>> = [
-                ("Volume flow", "volume_flow", "volume_flow"),
-                ("Mass flow", "mass_flow", "mass_flow"),
-                ("Mixed temperature", "temperature", "temperature"),
-                ("Static pressure", "pressure", "pressure"),
-                ("Sensible heat", "sensible_heat", "power"),
+                (crate::words::ts("Volume flow"), "volume_flow", "volume_flow"),
+                (crate::words::ts("Mass flow"), "mass_flow", "mass_flow"),
+                (crate::words::ts("Mixed temperature"), "temperature", "temperature"),
+                (crate::words::ts("Static pressure"), "pressure", "pressure"),
+                (crate::words::ts("Sensible heat"), "sensible_heat", "power"),
             ]
             .into_iter()
             .map(|(label, key, quantity)| {
@@ -1124,16 +1156,20 @@ fn port_transport(ui: &mut egui::Ui, f: &FluidResult, pick: fieldcraft_engine::r
                 vec![titled(label, report["units"][quantity].as_str()), amount(&face["inflow"][key]), amount(&face["outflow"][key])]
             })
             .collect();
-            crate::reply::text_table(ui, &format!("fc_port_{name}"), &["", "In", "Out"], &rows);
+            crate::reply::text_table(ui, &format!("fc_port_{name}"), &["", crate::words::ts("In"), crate::words::ts("Out")], &rows);
         }
-        kit::row(ui, "Net mass out", |ui| kit::text(ui, &format(&report["net_mass_flow"], "mass_flow"), kit::Text::Cell));
-        kit::row(ui, "Net heat out", |ui| kit::text(ui, &format(&report["net_sensible_heat"], "power"), kit::Text::Cell));
+        kit::row(ui, crate::words::ts("Net mass out"), |ui| kit::text(ui, &format(&report["net_mass_flow"], "mass_flow"), kit::Text::Cell));
+        kit::row(ui, crate::words::ts("Net heat out"), |ui| kit::text(ui, &format(&report["net_sensible_heat"], "power"), kit::Text::Cell));
         kit::status_line(
             ui,
-            "Mass uses reference density. Heat is advective transport, relative to the mixed inflow temperature below; wall heat, conduction and storage are separate.",
+            crate::words::ts(
+                "Mass uses reference density. Heat is advective transport, relative to the mixed inflow temperature below; wall heat, conduction and storage are separate.",
+            ),
             kit::StatusTone::Dim,
         );
-        kit::row(ui, "Mixed inflow temperature", |ui| kit::text(ui, &format(&report["heat_reference"], "temperature"), kit::Text::Cell));
+        kit::row(ui, crate::words::ts("Mixed inflow temperature"), |ui| {
+            kit::text(ui, &format(&report["heat_reference"], "temperature"), kit::Text::Cell)
+        });
     });
 }
 
@@ -1161,7 +1197,7 @@ fn component_limits(ui: &mut egui::Ui, f: &FluidResult, units: &fieldcraft_model
     }
     kit::divider(ui, "fc_results_components");
     let unit = unit_of(Quantity::Temperature, units);
-    kit::text(ui, &titled("Component temperatures", unit.as_deref()), kit::Text::Heading("fc_results_components"));
+    kit::text(ui, &titled(crate::words::ts("Component temperatures"), unit.as_deref()), kit::Text::Heading("fc_results_components"));
     let over = checks.iter().filter(|c| c.ok == Some(false)).count();
     let limited = checks.iter().filter(|c| c.limit.is_some()).count();
     match f.components_ok() {
@@ -1169,7 +1205,7 @@ fn component_limits(ui: &mut egui::Ui, f: &FluidResult, units: &fieldcraft_model
             kit::check_status_line(
                 ui,
                 "fc_results_components:verdict",
-                &format!("Every component stays under its limit ({limited} checked)"),
+                &crate::words::wfmt!("Every component stays under its limit ({limited} checked)"),
                 kit::CheckStatus::Ok,
             );
         }
@@ -1177,22 +1213,22 @@ fn component_limits(ui: &mut egui::Ui, f: &FluidResult, units: &fieldcraft_model
             kit::check_status_line(
                 ui,
                 "fc_results_components:verdict",
-                &format!("{over} of {limited} components over their limit"),
+                &crate::words::wfmt!("{over} of {limited} components over their limit"),
                 kit::CheckStatus::Error,
             );
         }
         None if limited == 0 => {
-            kit::status_line(ui, "No temperature limits: set one per conducting solid", kit::StatusTone::Dim);
+            kit::status_line(ui, crate::words::ts("No temperature limits: set one per conducting solid"), kit::StatusTone::Dim);
         }
         None => {}
     }
     let temperature = |k: f64| number(shown_in(Quantity::Temperature, k, units));
     let difference = unit_of(Quantity::TemperatureDifference, units);
-    let margin = titled("Margin", difference.as_deref());
+    let margin = titled(crate::words::ts("Margin"), difference.as_deref());
     let columns = [
         kit::Column::new("", 1.6).flex(),
-        kit::Column::new("Peak", 1.0).flex(),
-        kit::Column::new("Limit", 1.0).flex(),
+        kit::Column::new(crate::words::ts("Peak"), 1.0).flex(),
+        kit::Column::new(crate::words::ts("Limit"), 1.0).flex(),
         kit::Column::new(&margin, 1.0).flex(),
     ];
     kit::table_custom(ui, "fc_results_components", &columns, "", |ui, table| {
@@ -1200,7 +1236,7 @@ fn component_limits(ui: &mut egui::Ui, f: &FluidResult, units: &fieldcraft_model
         for c in by_margin(&checks) {
             let tip = c.peak.map(|p| {
                 let at = with_unit(number(shown_in(Quantity::Time, p.time, units)), unit_of(Quantity::Time, units).as_deref());
-                if p.steady { format!("Steady value (t = {at})") } else { format!("Highest over the frames, at t = {at}") }
+                if p.steady { crate::words::wfmt!("Steady value (t = {at})") } else { crate::words::wfmt!("Highest over the frames, at t = {at}") }
             });
             let over = c.ok == Some(false);
             table.row(ui, &c.body, false, |row| {
@@ -1239,9 +1275,9 @@ fn reactions_table(ui: &mut egui::Ui, r: &Value, plot: &Plot) {
         .flatten()
         .map(|s| {
             let nodes = s["nodes"].as_u64().unwrap_or(0);
-            (format!("{} ({} nodes)", s["set"].as_str().unwrap_or("?"), count(nodes)), vector(&s["force"]), vector(&s["moment"]))
+            (crate::words::wfmt!("{} ({} nodes)", s["set"].as_str().unwrap_or("?"), count(nodes)), vector(&s["force"]), vector(&s["moment"]))
         })
-        .chain(std::iter::once(("All nodes".to_string(), vector(&r["total"]["force"]), vector(&r["total"]["moment"]))))
+        .chain(std::iter::once((crate::words::ts("All nodes").to_string(), vector(&r["total"]["force"]), vector(&r["total"]["moment"]))))
         .collect();
     let applied = vector(&r["applied"]);
     let largest = |vs: &mut dyn Iterator<Item = [f64; 3]>| vs.flatten().map(f64::abs).filter(|x| x.is_finite()).fold(0.0, f64::max);
@@ -1249,7 +1285,7 @@ fn reactions_table(ui: &mut egui::Ui, r: &Value, plot: &Plot) {
     let moment_scale = largest(&mut rows.iter().filter_map(|r| r.2));
     let (force, moment) = (unit_of(Quantity::Force, &plot.units), unit_of(Quantity::Moment, &plot.units));
     let about = vector(&r["about"]).unwrap_or_default();
-    kit::status_line(ui, &format!("Moments about ({})", components(&about, 0.0)), kit::StatusTone::Dim);
+    kit::status_line(ui, &crate::words::wfmt!("Moments about ({})", components(&about, 0.0)), kit::StatusTone::Dim);
     let cells = |v: Option<[f64; 3]>, scale: f64| -> Vec<String> {
         (0..3).map(|k| v.and_then(|v| v.get(k).copied()).map_or("—".into(), |x| number_in(x, scale))).collect()
     };
@@ -1260,7 +1296,7 @@ fn reactions_table(ui: &mut egui::Ui, r: &Value, plot: &Plot) {
         crate::reply::text_table(ui, &format!("fc_results_reactions_{name}"), &["", "X", "Y", "Z"], &table);
     }
     if applied.is_some() {
-        let table = [[vec![titled("Applied F", force.as_deref())], cells(applied, force_scale)].concat()];
+        let table = [[vec![titled(crate::words::ts("Applied F"), force.as_deref())], cells(applied, force_scale)].concat()];
         crate::reply::text_table(ui, "fc_results_reactions_applied", &["", "X", "Y", "Z"], &table);
     }
     // Equilibrium: the reactions over the whole model balance the applied loads.
@@ -1268,9 +1304,9 @@ fn reactions_table(ui: &mut egui::Ui, r: &Value, plot: &Plot) {
         let residual = (0..3).map(|k| (total[k] + applied[k]).abs()).fold(0.0, f64::max);
         let balanced = residual <= fieldcraft_engine::results::BALANCE_TOLERANCE * force_scale.max(f64::MIN_POSITIVE);
         if balanced {
-            kit::check_status_line(ui, "fc_results_reactions:balance", "Reactions balance the applied loads", kit::CheckStatus::Ok);
+            kit::check_status_line(ui, "fc_results_reactions:balance", crate::words::ts("Reactions balance the applied loads"), kit::CheckStatus::Ok);
         } else {
-            let text = format!("Reactions and applied loads differ by {}", with_unit(number(residual), force.as_deref()));
+            let text = crate::words::wfmt!("Reactions and applied loads differ by {}", with_unit(number(residual), force.as_deref()));
             kit::check_status_line(ui, "fc_results_reactions:balance", &text, kit::CheckStatus::Warning);
         }
     }

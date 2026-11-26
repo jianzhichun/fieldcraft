@@ -178,7 +178,10 @@ pub fn toolbar(app: &mut ModelApp, ui: &mut egui::Ui) {
         let tabs = app.ui.workspace.tabs();
         let accent = TabAccent::current(ui.ctx());
         let row = ribbon::Tabs {
-            tabs: tabs.iter().map(|tab| ribbon::Tab { id: tab.id(), label: tab.label(), accent, contextual: false, aliases: &[] }).collect(),
+            tabs: tabs
+                .iter()
+                .map(|tab| ribbon::Tab { id: tab.id(), label: crate::words::tab(tab.id(), tab.label()), accent, contextual: false, aliases: &[] })
+                .collect(),
             active: app.ui.tab.id(),
             add: None,
             menu_open_from: &|_| false,
@@ -215,29 +218,30 @@ pub fn toolbar(app: &mut ModelApp, ui: &mut egui::Ui) {
             .zip(keys.iter().zip(&states))
             .map(|((entries, shown), (key, states))| {
                 let panel = entries.first().map_or("", |c| c.panel);
+                let panel_text = crate::words::panel(panel);
                 let of = |c: &Capability| entries.iter().position(|e| e.id == c.id).and_then(|i| states.get(i));
                 // A group is as wide as its buttons; its label (and its arrow) must fit under them,
                 // so a short group's buttons widen to its label ("Boundary Conditions" over one
                 // button would run into the next group's label).
-                let widths: Vec<f32> = shown.iter().map(|c| button_width(&painter, c.label)).collect();
+                let widths: Vec<f32> = shown.iter().map(|c| button_width(&painter, crate::words::cap(c.id, c.label))).collect();
                 let k = solidcraft_theme::Tokens::get();
-                let label = painter.layout_no_wrap(panel.to_string(), kit::type_face::semibold(k.font_caption), k.text_dim).size().x;
+                let label = painter.layout_no_wrap(panel_text.to_string(), kit::type_face::semibold(k.font_caption), k.text_dim).size().x;
                 let need = label + LABEL_ROOM;
                 let row = widths.iter().sum::<f32>() + widths.len().saturating_sub(1) as f32 * ribbon::BUTTON_GAP + 8.0;
                 let extra = if widths.is_empty() { 0.0 } else { (need - row).max(0.0) / widths.len() as f32 };
                 ribbon::Group {
                     key,
-                    name: panel,
-                    label: panel,
-                    tip: panel,
+                    name: panel_text,
+                    label: panel_text,
+                    tip: panel_text,
                     buttons: shown
                         .iter()
                         .zip(&widths)
                         .map(|(c, width)| ribbon::Button {
                             id: c.id,
                             run: c.id,
-                            label: c.label,
-                            name: c.label,
+                            label: crate::words::cap(c.id, c.label),
+                            name: crate::words::cap(c.id, c.label),
                             icon: c.id,
                             size: ribbon::ButtonSize { width: width + extra, min_width: ribbon::BUTTON_MIN_WIDTH + extra },
                             enabled: of(c).is_some_and(|s| s.enabled),
@@ -260,7 +264,7 @@ pub fn toolbar(app: &mut ModelApp, ui: &mut egui::Ui) {
                         .zip(states)
                         .map(|(c, s)| ribbon::MoreRow {
                             id: c.id,
-                            label: c.label,
+                            label: crate::words::cap(c.id, c.label),
                             icon: c.id,
                             shortcut: "",
                             enabled: s.enabled,
@@ -271,7 +275,15 @@ pub fn toolbar(app: &mut ModelApp, ui: &mut egui::Ui) {
                 }
             })
             .collect();
-        let row = ribbon::Row { groups, labels: true, accent, exit: false, reveal: None, more_tip: "More toolbar panels", handles: HANDLES };
+        let row = ribbon::Row {
+            groups,
+            labels: true,
+            accent,
+            exit: false,
+            reveal: None,
+            more_tip: crate::words::cap("extra.more_toolbar_panels", "More toolbar panels"),
+            handles: HANDLES,
+        };
         let out = ribbon::show(ui, &row, Rect::from_min_max(pos2(r.left(), top), r.max), &mut |_, _| false);
         // FieldCraft's part of each button: its hover text and milestone badge.
         for d in &out.buttons {
@@ -369,10 +381,10 @@ fn workspace_switcher(app: &mut ModelApp, ui: &mut egui::Ui, ws: Rect) {
     let floating = kit::Container::new(ui.ctx(), kit::Surface::Chrome).floating();
     let w = app.ui.workspace;
     let switcher = app_bar::Switcher {
-        name: w.label(),
-        caption: "Workspace",
+        name: crate::words::workspace(w.label()),
+        caption: crate::words::cap("extra.workspace", "Workspace"),
         icon: w.icon(),
-        tip: "Change workspace",
+        tip: crate::words::cap("extra.change_workspace", "Change workspace"),
         open: app.ui.menu.as_deref() == Some("workspace"),
         floating,
         labels: true,
@@ -390,9 +402,9 @@ fn workspace_switcher(app: &mut ModelApp, ui: &mut egui::Ui, ws: Rect) {
     let items: Vec<kit::Item> = Workspace::ALL
         .into_iter()
         .map(|w| {
-            let mut item = kit::Item::action(w.label(), w.label(), w.icon());
+            let mut item = kit::Item::action(w.label(), crate::words::workspace(w.label()), w.icon());
             if w == current {
-                item.shortcut = "current".into();
+                item.shortcut = crate::words::cap("extra.current", "current").into();
             }
             item
         })
@@ -442,9 +454,9 @@ fn rows(app: &ModelApp, entries: &'static [Capability]) -> Vec<Row> {
         let missing = app.unavailable(c.id);
         rows.push(Row {
             id: c.id,
-            label: c.label,
+            label: crate::words::cap(c.id, c.label),
             icon: c.id,
-            note: c.milestone().map(|m| format!("soon · {m}")).unwrap_or_default(),
+            note: c.milestone().map(|m| format!("{} · {m}", crate::words::cap("extra.soon", "soon"))).unwrap_or_default(),
             enabled: c.command().is_some() && missing.is_none(),
             tip: Unavailable::tip(&c.tooltip(), missing.as_ref()),
             entry: true,

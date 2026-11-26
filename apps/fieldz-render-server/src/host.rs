@@ -40,6 +40,9 @@ pub const MAX_RECTS: usize = 256;
 pub const DEVICE_LOST: &str = "device-lost";
 /// How long the device-loss notice lets the `bye` reach the host before the process exits.
 pub const DEVICE_LOST_GRACE: Duration = Duration::from_millis(250);
+/// The catalogue ids and chrome literals `ui.language {probe: true}` samples.
+pub const PROBE_IDS: [&str; 5] = ["ui.hide", "ui.expand", "ui.redo", "prefs.search", "cap.mesh.tet.generate"];
+pub const PROBE_CHROME: [&str; 5] = ["Solve", "File", "Mesh", "Results", "Save"];
 
 /// Tell the host the device is gone and this session is over. `false` when the session's final
 /// `bye` was already spoken (a `stop` won the race).
@@ -107,11 +110,13 @@ pub struct Config {
     /// The theme in effect; a `theme` message updates it in [`ThemeMode::Auto`].
     pub dark: bool,
     pub theme: ThemeMode,
+    /// The interface language: `zh` (default) or `en`. `ui.language` changes it.
+    pub language: &'static str,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { width: 1280.0, height: 800.0, dpr: 1.0, fps_cap: 60.0, dark: true, theme: ThemeMode::Auto }
+        Config { width: 1280.0, height: 800.0, dpr: 1.0, fps_cap: 60.0, dark: true, theme: ThemeMode::Auto, language: "zh" }
     }
 }
 
@@ -283,6 +288,9 @@ impl Host {
 
     fn run(&mut self, rx: &Receiver<Event>, writer: &Writer, book: &StopBook) -> Result<(), String> {
         loop {
+            // The thread's language: every message handled and every pass drawn in this
+            // iteration formats UI text through `solidcraft_ui_text` and `ui_egui::words`.
+            let _language = solidcraft_ui_text::scope(self.cfg.language);
             let now = Instant::now();
             let timeout = self.timeout(now);
             match rx.recv_timeout(timeout) {
@@ -388,6 +396,7 @@ impl Host {
         let op = op.unwrap_or_else(|| format!("call/{id}"));
         match method.as_str() {
             "ui.theme" => return self.reply(writer, id, json!({"ok": true, "result": {"dark": self.cfg.dark}})),
+            "ui.language" => return self.language(writer, id, &params),
             "ui.operations" => return self.operations(writer, book, id, &params),
             "engine.batch" => {
                 return match Batch::new(op.clone(), &params) {
@@ -419,6 +428,32 @@ impl Host {
                 self.pending.insert(id, rx);
             }
         }
+    }
+
+    /// `ui.language`: switch the interface language (`zh` or `en`), and with `probe: true`
+    /// answer a sample of the catalogue and the chrome in that language, for tests.
+    fn language(&mut self, writer: &Writer, id: u64, params: &Value) {
+        let lang = match params.get("lang").and_then(Value::as_str) {
+            Some("zh") => "zh",
+            Some("en") => "en",
+            Some(other) => return self.reply(writer, id, json!({"ok": false, "error": format!("`lang` must be `zh` or `en` (got `{other}`)")})),
+            None => self.cfg.language,
+        };
+        self.cfg.language = lang;
+        // Every string on the next full frame is in the new language.
+        self.need_full = true;
+        self.dirty();
+        let mut result = json!({"lang": lang});
+        if params.get("probe").and_then(Value::as_bool).unwrap_or(false) {
+            let _language = solidcraft_ui_text::scope(lang);
+            let catalogue: serde_json::Map<String, Value> =
+                PROBE_IDS.iter().map(|id| ((*id).to_string(), json!(solidcraft_ui_text::tr(*id)))).collect();
+            let chrome: serde_json::Map<String, Value> =
+                PROBE_CHROME.iter().map(|text| ((*text).to_string(), json!(fieldcraft_ui_egui::words::ts(*text)))).collect();
+            result["catalogue"] = Value::Object(catalogue);
+            result["chrome"] = Value::Object(chrome);
+        }
+        self.reply(writer, id, json!({"ok": true, "result": result}));
     }
 
     fn operations(&mut self, writer: &Writer, book: &StopBook, id: u64, params: &Value) {
@@ -636,6 +671,9 @@ impl Host {
         // This pass answers the requests made so far; one made during it (the viewport's
         // `repaint_delay`, a job's next poll) schedules the next.
         self.next_repaint = None;
+        // Draw in the session's current language: a `ui.language` handled earlier in this
+        // iteration changed it after the loop's scope was entered.
+        let _language = solidcraft_ui_text::scope(self.cfg.language);
         let (width, height) = self.size_px;
         let started = self.started;
         let mut raw = egui::RawInput {
@@ -895,7 +933,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             let painter = StubPainter { w: 0, h: 0, frames: 0 };
-            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto, language: "zh" };
             let host = Host::new(Session::default(), cfg, Box::new(painter)).unwrap();
             host.serve(stream, "secret".into())
         });
@@ -954,7 +992,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             let painter = StubPainter { w: 0, h: 0, frames: 0 };
-            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto, language: "zh" };
             Host::new(Session::default(), cfg, Box::new(painter)).unwrap().serve(stream, "secret".into())
         });
 
@@ -1008,13 +1046,64 @@ mod tests {
     }
 
     #[test]
+    fn ui_language_answers_a_probe_and_switches_the_interface() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let painter = StubPainter { w: 0, h: 0, frames: 0 };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto, language: "zh" };
+            Host::new(Session::default(), cfg, Box::new(painter)).unwrap().serve(stream, "secret".into())
+        });
+        let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+        let mut out = client.try_clone().unwrap();
+        write_message(&mut out, &json!({"t":"hello","v":1,"token":"secret"}), &[]).unwrap();
+        let (_ready, _) = read_type(&mut client, &mut out, "ready");
+        let (first, _) = read_type(&mut client, &mut out, "frame");
+        write_message(&mut out, &json!({"t":"ack","seq":first["seq"]}), &[]).unwrap();
+
+        // The default is Chinese: the catalogue and the chrome sample both answer in it, and the
+        // `cap.*` sample is the label the ribbon's Tet Mesh button reads.
+        write_message(&mut out, &json!({"t":"call","id":1,"method":"ui.language","params":{"probe":true}}), &[]).unwrap();
+        let zh = read_reply(&mut client, &mut out, 1);
+        assert_eq!(zh["ok"], true, "{zh}");
+        assert_eq!(zh["result"]["lang"], "zh");
+        assert_eq!(zh["result"]["catalogue"]["ui.hide"], "隐藏", "{zh}");
+        assert_eq!(zh["result"]["catalogue"]["cap.mesh.tet.generate"], "四面体网格", "{zh}");
+        assert_eq!(zh["result"]["chrome"]["Solve"], "求解", "{zh}");
+        assert_eq!(zh["result"]["chrome"]["File"], "文件", "{zh}");
+
+        // Switching to English changes every sample, and the catalogue label the toolbar reads.
+        write_message(&mut out, &json!({"t":"call","id":2,"method":"ui.language","params":{"lang":"en","probe":true}}), &[]).unwrap();
+        let en = read_reply(&mut client, &mut out, 2);
+        assert_eq!(en["result"]["lang"], "en", "{en}");
+        assert_eq!(en["result"]["catalogue"]["ui.hide"], "Hide", "{en}");
+        assert_eq!(en["result"]["catalogue"]["cap.mesh.tet.generate"], "Tet Mesh", "{en}");
+        assert_eq!(en["result"]["chrome"]["Solve"], "Solve", "{en}");
+
+        // An unknown language is refused and leaves the current one in place.
+        write_message(&mut out, &json!({"t":"call","id":3,"method":"ui.language","params":{"lang":"fr"}}), &[]).unwrap();
+        let refused = read_reply(&mut client, &mut out, 3);
+        assert_eq!(refused["ok"], false, "{refused}");
+        write_message(&mut out, &json!({"t":"call","id":4,"method":"ui.language","params":{"probe":true}}), &[]).unwrap();
+        let still = read_reply(&mut client, &mut out, 4);
+        assert_eq!(still["result"]["lang"], "en", "{still}");
+
+        write_message(&mut out, &json!({"t":"stop","why":"test"}), &[]).unwrap();
+        let (bye, _) = read_type(&mut client, &mut out, "bye");
+        assert_eq!(bye["why"], "test");
+        server.join().unwrap().unwrap();
+    }
+
+    #[test]
     fn a_fixed_theme_ignores_the_page() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let server = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             let painter = StubPainter { w: 0, h: 0, frames: 0 };
-            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Dark };
+            let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Dark, language: "zh" };
             Host::new(Session::default(), cfg, Box::new(painter)).unwrap().serve(stream, "secret".into())
         });
         let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
@@ -1078,7 +1167,7 @@ mod tests {
         let (stream, _) = listener.accept().unwrap();
         let writer = Writer::new(stream);
         let (tx, rx) = mpsc::channel();
-        let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto };
+        let cfg = Config { width: 320.0, height: 200.0, dpr: 1.0, fps_cap: 120.0, dark: true, theme: ThemeMode::Auto, language: "zh" };
         let mut host = Host::new(Session::default(), cfg, Box::new(StuckPainter { tx, rx })).unwrap();
         host.greeted = true;
         let started = Instant::now();

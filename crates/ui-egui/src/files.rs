@@ -159,8 +159,8 @@ impl Kind {
     /// What the window says while it opens and once it has.
     fn verbs(self) -> (&'static str, &'static str) {
         match self {
-            Kind::Model | Kind::Design => ("Opening", "Opened"),
-            Kind::Mesh | Kind::Orphan => ("Importing", "Imported"),
+            Kind::Model | Kind::Design => (crate::words::ts("Opening"), crate::words::ts("Opened")),
+            Kind::Mesh | Kind::Orphan => (crate::words::ts("Importing"), crate::words::ts("Imported")),
         }
     }
 }
@@ -446,27 +446,27 @@ fn finished(command: &str, done: &str, took: &str, reply: &Value, units: &fieldc
         (Some(n), Some(kind)) if BACKGROUND.contains(&command) => {
             let least = |f: &dyn Fn(&Value) -> Option<f64>| bodies().filter_map(f).reduce(f64::min);
             let mut q = match (least(&|b| b["quality"]["mesh"]["min_dihedral"].as_f64()), least(&|b| b["quality"]["min_scaled_jacobian"].as_f64())) {
-                (Some(d), _) => format!(", smallest dihedral angle {d:.1}°"),
-                (None, Some(j)) => format!(", smallest scaled Jacobian {}", fieldcraft_model::units::format_number(sig3(j))),
+                (Some(d), _) => crate::words::wfmt!(", smallest dihedral angle {d:.1}°"),
+                (None, Some(j)) => crate::words::wfmt!(", smallest scaled Jacobian {}", fieldcraft_model::units::format_number(sig3(j))),
                 _ => String::new(),
             };
             let levels = bodies().filter_map(|b| b["grid"]["levels"].as_u64()).max();
             if let Some(levels) = levels {
                 let wall = least(&|b| b["grid"]["thinnest_wall"].as_f64())
                     .map(|w| {
-                        format!(
+                        crate::words::wfmt!(
                             " (thinnest wall {} {})",
                             fieldcraft_model::units::format_number(sig3(w)),
                             units.symbol(fieldcraft_model::units::Quantity::Length)
                         )
                     })
                     .unwrap_or_default();
-                q.push_str(&format!(", {levels} octree levels{wall}"));
+                q.push_str(&crate::words::wfmt!(", {levels} octree levels{wall}"));
             }
             let n = fieldcraft_engine::thousands(usize::try_from(n).unwrap_or(usize::MAX));
-            format!("{done}: {n} {kind}{q} in {took} — Mesh › Quality checks them")
+            crate::words::wfmt!("{done}: {n} {kind}{q} in {took} — Mesh › Quality checks them")
         }
-        _ if is_long(command) && !opens(command) => format!("{done} in {took}"),
+        _ if is_long(command) && !opens(command) => crate::words::wfmt!("{done} in {took}"),
         _ => done.to_string(),
     }
 }
@@ -482,7 +482,7 @@ fn sig3(v: f64) -> f64 {
 
 /// What the window says while a sample opens, and once it has.
 fn sample_job(sample: &fieldcraft_engine::sample::Sample) -> (String, String) {
-    (format!("Opening the {} sample", sample.label), format!("Opened the {} sample", sample.label))
+    (crate::words::wfmt!("Opening the {} sample", sample.label), crate::words::wfmt!("Opened the {} sample", sample.label))
 }
 
 /// A duration as `0.4 s`, `12 s` or `3 min 05 s`.
@@ -490,7 +490,7 @@ pub fn elapsed(seconds: f64) -> String {
     match seconds {
         s if s < 10.0 => format!("{s:.1} s"),
         s if s < 60.0 => format!("{s:.0} s"),
-        s => format!("{} min {:02} s", (s / 60.0) as u64, (s % 60.0) as u64),
+        s => crate::words::wfmt!("{} min {:02} s", (s / 60.0) as u64, (s % 60.0) as u64),
     }
 }
 
@@ -526,10 +526,12 @@ impl Replace {
     fn name(&self) -> String {
         match self {
             Replace::File(p) => file_name(p),
-            Replace::Deck(p) => p.get("path").and_then(Value::as_str).map(file_name).unwrap_or_else(|| "an Abaqus deck".into()),
-            Replace::Sample(n) => fieldcraft_engine::sample::find(n).map_or_else(|| (*n).to_string(), |s| format!("the {} sample", s.label)),
-            Replace::Update => "the update".into(),
-            Replace::New => "a new model".into(),
+            Replace::Deck(p) => p.get("path").and_then(Value::as_str).map(file_name).unwrap_or_else(|| crate::words::ts("an Abaqus deck").into()),
+            Replace::Sample(n) => {
+                fieldcraft_engine::sample::find(n).map_or_else(|| (*n).to_string(), |s| crate::words::wfmt!("the {} sample", s.label))
+            }
+            Replace::Update => crate::words::ts("the update").into(),
+            Replace::New => crate::words::ts("a new model").into(),
         }
     }
 }
@@ -589,7 +591,7 @@ pub enum Answer {
 fn model_name(session: &Session) -> String {
     match session.path.as_deref().and_then(|p| Path::new(p).file_stem()).and_then(|s| s.to_str()) {
         Some(stem) => stem.to_string(),
-        None => session.sample.map_or_else(|| "Untitled".to_string(), |label| format!("{label} (sample)")),
+        None => session.sample.map_or_else(|| crate::words::ts("Untitled").to_string(), |label| crate::words::wfmt!("{label} (sample)")),
     }
 }
 
@@ -657,7 +659,7 @@ fn spawn(
 ) -> (Inbox<Finished>, Option<Work>) {
     let (tx, rx) = crate::inbox::channel();
     let work = start(
-        format!("fieldcraft {command}"),
+        crate::words::wfmt!("fieldcraft {command}"),
         Box::new(move || {
             let mut s = session;
             #[allow(clippy::disallowed_methods, reason = "the job's worker thread")]
@@ -690,7 +692,7 @@ impl ModelApp {
     /// Only user actions call this. A pending chooser never blocks commands or the event loop.
     fn pick_file(&mut self, request: FilePicker, action: PickerAction) -> bool {
         if self.picker.is_some() {
-            self.set_status("Finish or cancel the open file chooser first", false);
+            self.set_status(crate::words::ts("Finish or cancel the open file chooser first"), false);
             return false;
         }
         if self.ensure_idle().is_err() {
@@ -700,7 +702,7 @@ impl ModelApp {
             // A host that builds its native chooser here, and panics doing it, is caught as in
             // `poll_picker`.
             let Ok(future) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pick(request))) else {
-                self.set_status(CHOOSER_FAILED, true);
+                self.set_status(crate::words::ts(CHOOSER_FAILED), true);
                 return false;
             };
             self.picker = Some(PendingPicker {
@@ -711,9 +713,14 @@ impl ModelApp {
             });
             return false;
         }
+        // The filter names are FieldCraft's (the extensions are not): the host's dialog shows
+        // them in the thread's language.
+        let shown = |filters: &[Filter]| -> Vec<Filter> {
+            filters.iter().map(|f| Filter { name: crate::words::ts(f.name), extensions: f.extensions }).collect()
+        };
         let path = match request {
-            FilePicker::Open { filters } => self.services.pick_open.as_ref().and_then(|p| p(&filters)),
-            FilePicker::Save { name, filters } => self.services.pick_save.as_ref().and_then(|p| p(&name, &filters)),
+            FilePicker::Open { filters } => self.services.pick_open.as_ref().and_then(|p| p(&shown(&filters))),
+            FilePicker::Save { name, filters } => self.services.pick_save.as_ref().and_then(|p| p(&name, &shown(&filters))),
         };
         path.is_some_and(|path| self.picked_file(action, path))
     }
@@ -744,7 +751,7 @@ impl ModelApp {
                     || pending.document != self.session.opened()
                     || pending.revision != (self.revision, self.session.revision(), self.session.path.clone())
                 {
-                    self.set_status("The model changed while the file chooser was open; choose the file again", true);
+                    self.set_status(crate::words::ts("The model changed while the file chooser was open; choose the file again"), true);
                 } else {
                     self.picked_file(pending.action, path);
                 }
@@ -788,7 +795,7 @@ impl ModelApp {
                 }
                 let written = self.run(&command, params).is_ok();
                 if written && command != "deck.write" {
-                    self.set_status(format!("Wrote {}", file_name(&path)), false);
+                    self.set_status(crate::words::wfmt!("Wrote {}", file_name(&path)), false);
                 }
                 written
             }
@@ -808,7 +815,7 @@ impl ModelApp {
     /// `Err` (and the status says so) while a background job runs: commands wait for it.
     pub fn ensure_idle(&mut self) -> Result<(), String> {
         let Some(busy) = self.busy() else { return Ok(()) };
-        let e = format!("{busy}: wait for it or cancel it");
+        let e = crate::words::wfmt!("{busy}: wait for it or cancel it");
         self.set_status(e.clone(), true);
         Err(e)
     }
@@ -894,7 +901,7 @@ impl ModelApp {
                 let (doing, done) = kind.verbs();
                 (format!("{doing} {}", file_name(path)), format!("{done} {}", file_name(path)))
             }
-            _ => (label.clone(), format!("{label} done")),
+            _ => (label.clone(), crate::words::wfmt!("{label} done")),
         };
         if self.begin_job(command, params, title, done, path)
             && let Some(l) = self.loading.as_mut()
@@ -917,7 +924,7 @@ impl ModelApp {
     /// and run it, as `fieldcraft-cli run` does.
     pub fn run_script_dialog(&mut self) {
         if !self.has_open_picker() {
-            self.set_status("Run Script needs a file chooser; scripts also run with fieldcraft-cli run", true);
+            self.set_status(crate::words::ts("Run Script needs a file chooser; scripts also run with fieldcraft-cli run"), true);
             return;
         }
         self.pick_file(FilePicker::Open { filters: vec![SCRIPT] }, PickerAction::Script);
@@ -951,7 +958,10 @@ impl ModelApp {
     /// replacing unsaved changes asks first.
     pub fn open_path(&mut self, path: &str) {
         let Some(kind) = Kind::of(path) else {
-            self.set_status(format!("{path}: FieldZ opens .fieldcraft models, .solidcraft designs, .3mf tagged meshes and .msh orphan meshes"), true);
+            self.set_status(
+                crate::words::wfmt!("{path}: FieldZ opens .fieldcraft models, .solidcraft designs, .3mf tagged meshes and .msh orphan meshes"),
+                true,
+            );
             return;
         };
         if kind == Kind::Model && self.has_unsaved_work() {
@@ -977,7 +987,7 @@ impl ModelApp {
     pub fn open_sample(&mut self, name: &str) {
         let Some(sample) = fieldcraft_engine::sample::find(name) else {
             // An unknown name (a typo, an old `?sample=` link): the samples to choose from (#200).
-            self.set_status(format!("There is no sample `{name}`: choose one of these"), true);
+            self.set_status(crate::words::wfmt!("There is no sample `{name}`: choose one of these"), true);
             self.prompt = Some(Prompt::Samples);
             return;
         };
@@ -1001,7 +1011,7 @@ impl ModelApp {
     fn load_new(&mut self) {
         if self.run("file.new", json!({})).is_ok() {
             self.model_changed();
-            self.set_status("New model", false);
+            self.set_status(crate::words::ts("New model"), false);
         }
     }
 
@@ -1019,8 +1029,8 @@ impl ModelApp {
             return;
         }
         let n = self.session.model.steps().len();
-        let done = format!("Solved {n} step{}", if n == 1 { "" } else { "s" });
-        self.begin_job("solve.run", json!({}), "Solving".into(), done, None);
+        let done = crate::words::wfmt!("Solved {n} step{}", if n == 1 { "" } else { "s" });
+        self.begin_job("solve.run", json!({}), crate::words::ts("Solving").into(), done, None);
     }
 
     /// Run `command` as a background job for the control channel: the job's number (its
@@ -1031,13 +1041,13 @@ impl ModelApp {
             return Err(u.to_string());
         }
         let label = crate::command_label(spec.id).to_string();
-        let title = if spec.id.starts_with("solve.") { "Solving".to_string() } else { label.clone() };
+        let title = if spec.id.starts_with("solve.") { crate::words::ts("Solving").to_string() } else { label.clone() };
         let steps = self.session.model.steps().len();
         let sample = || params.get("name").and_then(Value::as_str).and_then(fieldcraft_engine::sample::find);
         let (title, done) = match spec.id {
             "file.sample" if let Some(sample) = sample() => sample_job(sample),
-            "solve.run" => (title, format!("Solved {steps} step{}", if steps == 1 { "" } else { "s" })),
-            _ => (title, format!("{label} done")),
+            "solve.run" => (title, crate::words::wfmt!("Solved {steps} step{}", if steps == 1 { "" } else { "s" })),
+            _ => (title, crate::words::wfmt!("{label} done")),
         };
         if !self.begin_job(spec.id, params, title, done, None) {
             return Err(self.busy().map_or_else(|| "busy".to_string(), |b| format!("{b}: wait for it or cancel it")));
@@ -1049,7 +1059,13 @@ impl ModelApp {
     /// Recover an autosaved model (`file.recover`) in the background.
     pub fn recover(&mut self, id: &str) {
         self.prompt = None;
-        self.begin_job("file.recover", json!({"id": id}), "Recovering the autosaved model".into(), "Recovered the autosaved model".into(), None);
+        self.begin_job(
+            "file.recover",
+            json!({"id": id}),
+            crate::words::ts("Recovering the autosaved model").into(),
+            crate::words::ts("Recovered the autosaved model").into(),
+            None,
+        );
     }
 
     /// Cancel the background job: its command stops at its next check
@@ -1060,9 +1076,13 @@ impl ModelApp {
             l.progress.cancel();
             self.queued.clear();
             for w in &l.waiters {
-                let _ = w.send(json!({"ok": false, "error": format!("cancelled: {}", l.title), "cancelled": true}));
+                let _ = w.send(json!({"ok": false, "error": crate::words::wfmt!("cancelled: {}", l.title), "cancelled": true}));
             }
-            let line = if l.title == "Solving" { "Solve cancelled".to_string() } else { format!("{} cancelled", l.title) };
+            let line = if l.title == crate::words::ts("Solving") {
+                crate::words::ts("Solve cancelled").to_string()
+            } else {
+                crate::words::wfmt!("{} cancelled", l.title)
+            };
             self.set_status(line, false);
         }
     }
@@ -1085,7 +1105,7 @@ impl ModelApp {
         let reply = match &outcome {
             Some(Ok((v, _))) => json!({"ok": true, "result": v}),
             Some(Err(e)) => json!({"ok": false, "error": e}),
-            None => json!({"ok": false, "error": format!("{}: stopped unexpectedly", l.title)}),
+            None => json!({"ok": false, "error": crate::words::wfmt!("{}: stopped unexpectedly", l.title)}),
         };
         for w in &l.waiters {
             let _ = w.send(reply.clone());
@@ -1100,7 +1120,7 @@ impl ModelApp {
                 if self.dialog.as_ref().is_some_and(|d| l.form == Some(d.command)) {
                     self.form_done();
                 }
-                let done = reply.get("path").and_then(Value::as_str).map_or(l.done, |p| format!("Wrote {}", file_name(p)));
+                let done = reply.get("path").and_then(Value::as_str).map_or(l.done, |p| crate::words::wfmt!("Wrote {}", file_name(p)));
                 self.set_status(done, false);
             }
             Some(Ok((reply, Product::Session(session, prebuilt)))) => {
@@ -1112,7 +1132,7 @@ impl ModelApp {
                 match opened.recent.clone() {
                     Some(path) if unrelated && Kind::of(&path) == Some(Kind::Design) => {
                         self.held = Some(opened);
-                        self.set_status(format!("{} has none of the bodies the model is on", file_name(&path)), false);
+                        self.set_status(crate::words::wfmt!("{} has none of the bodies the model is on", file_name(&path)), false);
                         self.prompt = Some(Prompt::Design(path));
                         return false;
                     }
@@ -1126,7 +1146,7 @@ impl ModelApp {
                     d.error = Some(e);
                 }
             }
-            None => self.set_status(format!("{}: stopped unexpectedly", l.title), true),
+            None => self.set_status(crate::words::wfmt!("{}: stopped unexpectedly", l.title), true),
         }
         self.open_queued();
         self.loading.is_some()
@@ -1160,7 +1180,7 @@ impl ModelApp {
         let mut done = o.done;
         if o.command == "deck.read" {
             self.imported_document = Some(self.session.opened());
-            done = format!("Read Abaqus Deck: {} unread keywords (details in the panel)", o.reply["unknown_count"]);
+            done = crate::words::wfmt!("Read Abaqus Deck: {} unread keywords (details in the panel)", o.reply["unknown_count"]);
             crate::context::opened(self, crate::context::Opened::Reply);
             self.reply = Some(crate::reply::Reply {
                 command: o.command.into(),
@@ -1170,7 +1190,7 @@ impl ModelApp {
             });
         }
         if o.command == "file.sample" && !self.session.model.steps().is_empty() {
-            done.push_str(" — Solve shows its results");
+            done.push_str(crate::words::ts(" — Solve shows its results"));
         }
         if warnings.is_empty() {
             self.set_status(done, false);
@@ -1196,12 +1216,12 @@ impl ModelApp {
                 self.begin_job(
                     "geometry.open",
                     json!({"path": path, "model": "new"}),
-                    format!("Opening {name}"),
-                    format!("Opened {name} as a new model"),
+                    crate::words::wfmt!("Opening {name}"),
+                    crate::words::wfmt!("Opened {name} as a new model"),
                     Some(path),
                 );
             }
-            DesignAnswer::Cancel => self.set_status(format!("Did not open {}", file_name(&path)), false),
+            DesignAnswer::Cancel => self.set_status(crate::words::wfmt!("Did not open {}", file_name(&path)), false),
         }
         if self.loading.is_none() {
             self.open_queued();
@@ -1267,7 +1287,7 @@ impl ModelApp {
     /// command's form opens with the format filled in.
     pub fn write_deck(&mut self, format: &str) {
         let Some(f) = fieldcraft_decks::format(format) else {
-            self.set_status(format!("no {format} deck writer yet"), true);
+            self.set_status(crate::words::wfmt!("no {format} deck writer yet"), true);
             return;
         };
         if !self.has_save_picker() {
@@ -1280,7 +1300,7 @@ impl ModelApp {
             "k" => &["k", "key", "dyn"],
             _ => &[],
         };
-        let filter = Filter { name: "Solver deck", extensions: exts };
+        let filter = Filter { name: crate::words::ts("Solver deck"), extensions: exts };
         self.pick_file(
             FilePicker::Save { name: format!("{}.{}", self.model_name(), f.extension), filters: vec![filter] },
             PickerAction::Export { command: "deck.write".into(), params: json!({"format": format}), extension: f.extension, alternatives: exts },
@@ -1405,12 +1425,16 @@ impl ModelApp {
 /// empty when everything resolves.
 fn stale_note(stale: &Value) -> String {
     let names = |k: &str| stale.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(", ");
-    let parts: Vec<String> = [("mesh of", names("mesh_bodies")), ("sets", names("sets")), ("seeds on", names("seeds"))]
-        .into_iter()
-        .filter(|(_, n)| !n.is_empty())
-        .map(|(what, n)| format!("{what} {n}"))
-        .collect();
-    if parts.is_empty() { String::new() } else { format!(" — not on this design: {}", parts.join("; ")) }
+    let parts: Vec<String> = [
+        (crate::words::ts("mesh of").to_string(), names("mesh_bodies")),
+        ("sets".to_string(), names("sets")),
+        (crate::words::ts("seeds on").to_string(), names("seeds")),
+    ]
+    .into_iter()
+    .filter(|(_, n)| !n.is_empty())
+    .map(|(what, n)| format!("{what} {n}"))
+    .collect();
+    if parts.is_empty() { String::new() } else { crate::words::wfmt!(" — not on this design: {}", parts.join("; ")) }
 }
 
 /// The last part of a path, for messages.
@@ -1421,11 +1445,11 @@ pub fn file_name(path: &str) -> String {
 /// How long ago, from an age in seconds: "just now", "5 min ago", "3 h ago", "2 days ago".
 pub fn ago(seconds: u64) -> String {
     match seconds {
-        0..60 => "just now".into(),
-        60..3600 => format!("{} min ago", seconds / 60),
-        3600..86_400 => format!("{} h ago", seconds / 3600),
-        86_400..172_800 => "1 day ago".into(),
-        _ => format!("{} days ago", seconds / 86_400),
+        0..60 => crate::words::ts("just now").into(),
+        60..3600 => crate::words::wfmt!("{} min ago", seconds / 60),
+        3600..86_400 => crate::words::wfmt!("{} h ago", seconds / 3600),
+        86_400..172_800 => crate::words::ts("1 day ago").into(),
+        _ => crate::words::wfmt!("{} days ago", seconds / 86_400),
     }
 }
 
@@ -1462,7 +1486,7 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
         let fraction = app.loading.as_ref().and_then(|l| l.progress.snapshot().fraction());
         let text = match app.loading.as_ref() {
             Some(l) => l.line(),
-            None => "Drop to open: .fieldcraft models, .solidcraft designs, .3mf tagged meshes, .msh orphan meshes".into(),
+            None => crate::words::ts("Drop to open: .fieldcraft models, .solidcraft designs, .3mf tagged meshes, .msh orphan meshes").into(),
         };
         let mut cancel = false;
         // A notification surface (the kit's Toast), independent of the workspace layout, with the
@@ -1476,7 +1500,7 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
                 let frame =
                     host.frame(ctx, k.panel, kit::frame::Side::Left).inner_margin(egui::Margin::symmetric(k.space_16 as i8, k.space_12 as i8));
                 host.show_frame(ui, frame, ctx.content_rect(), |ui| match fraction.filter(|_| loading) {
-                    Some(f) => cancel = kit::progress_action(ui, "fc_loading", &text, "", f as f32, "Cancel").clicked(),
+                    Some(f) => cancel = kit::progress_action(ui, "fc_loading", &text, "", f as f32, crate::words::ts("Cancel")).clicked(),
                     None => {
                         ui.horizontal(|ui| {
                             if loading {
@@ -1484,7 +1508,7 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
                             }
                             kit::text(ui, &text, kit::Text::Inline);
                             if loading {
-                                cancel = kit::button(ui, "Cancel", kit::Button::Normal).clicked();
+                                cancel = kit::button(ui, crate::words::ts("Cancel"), kit::Button::Normal).clicked();
                             }
                         });
                     }
@@ -1504,29 +1528,29 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
     match app.prompt.clone() {
         Some(Prompt::Unsaved(next)) => {
             let question = match next {
-                Replace::Update => format!("Save the changes to {} before restarting to update?", app.model_name()),
-                _ => format!("Save the changes to {} before opening {}?", app.model_name(), next.name()),
+                Replace::Update => crate::words::wfmt!("Save the changes to {} before restarting to update?", app.model_name()),
+                _ => crate::words::wfmt!("Save the changes to {} before opening {}?", app.model_name(), next.name()),
             };
-            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_unsaved"), "file.save", "Unsaved changes")
+            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_unsaved"), "file.save", crate::words::ts("Unsaved changes"))
                 .tone(kit::Tone::Warning)
-                .actions("Save", "Cancel", Some("Don't Save"))
+                .actions(crate::words::ts("Save"), crate::words::ts("Cancel"), Some(crate::words::ts("Don't Save")))
                 .secondary_left()
                 .show(ctx, true, |ui| {
                     message(ui, &question);
-                    note(ui, "Without saving, they are lost.");
+                    note(ui, crate::words::ts("Without saving, they are lost."));
                 });
             if let Some(a) = answer(closed, action, Answer::Save, Answer::Discard, Answer::Cancel) {
                 app.answer_unsaved(a);
             }
         }
         Some(Prompt::Design(path)) => {
-            let question = format!("{} has none of the bodies {}'s mesh and sets are on.", file_name(&path), app.model_name());
-            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_design"), "geometry.open", "Open design")
-                .actions("Start a New Model", "Cancel", Some("Keep the Current Model"))
+            let question = crate::words::wfmt!("{} has none of the bodies {}'s mesh and sets are on.", file_name(&path), app.model_name());
+            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_design"), "geometry.open", crate::words::ts("Open design"))
+                .actions(crate::words::ts("Start a New Model"), crate::words::ts("Cancel"), Some(crate::words::ts("Keep the Current Model")))
                 .secondary_left()
                 .show(ctx, true, |ui| {
                     message(ui, &question);
-                    note(ui, "A new model starts empty with this design; keeping the model keeps its mesh and definitions, which then refer to bodies the design does not have.");
+                    note(ui, crate::words::ts("A new model starts empty with this design; keeping the model keeps its mesh and definitions, which then refer to bodies the design does not have."));
                 });
             if let Some(a) = answer(closed, action, DesignAnswer::New, DesignAnswer::Keep, DesignAnswer::Cancel) {
                 app.answer_design(a);
@@ -1536,17 +1560,17 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             let allowed = ask.allowed();
             // Refused for the steps a boundary condition or load is active in: the way there.
             let deactivate = ask.deactivate_label();
-            let ok = if allowed { "Delete" } else { deactivate.as_deref().unwrap_or("") };
-            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_delete"), DELETE_ICON, "Delete")
+            let ok = if allowed { crate::words::ts("Delete") } else { deactivate.as_deref().unwrap_or("") };
+            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_delete"), DELETE_ICON, crate::words::ts("Delete"))
                 .tone(kit::Tone::Danger)
-                .actions(ok, if allowed { "Cancel" } else { "Close" }, None)
+                .actions(ok, if allowed { crate::words::ts("Cancel") } else { crate::words::ts("Close") }, None)
                 .show(ctx, allowed || deactivate.is_some(), |ui| {
                     message(ui, &ask.question());
                     if allowed && !ask.users.is_empty() {
-                        note(ui, "They are deleted too; Undo brings everything back.");
+                        note(ui, crate::words::ts("They are deleted too; Undo brings everything back."));
                     }
                     if deactivate.is_some() {
-                        note(ui, "Deactivating it there lets it be deleted next.");
+                        note(ui, crate::words::ts("Deactivating it there lets it be deleted next."));
                     }
                 });
             match answer(closed, action, true, false, false) {
@@ -1556,9 +1580,9 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             }
         }
         Some(Prompt::ReplaceMesh(r)) => {
-            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_replace_mesh"), "mesh.tet.generate", "Replace mesh")
+            let (closed, action) = kit::Confirm::new(egui::Id::unique("fc_replace_mesh"), "mesh.tet.generate", crate::words::ts("Replace mesh"))
                 .tone(kit::Tone::Warning)
-                .actions("Replace", "Cancel", None)
+                .actions(crate::words::ts("Replace"), crate::words::ts("Cancel"), None)
                 .show(ctx, true, |ui| {
                     message(ui, &r.question);
                     for w in &r.warnings {
@@ -1572,37 +1596,40 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
         Some(Prompt::Recover) => {
             let entries = app.recover_list(ctx);
             let (mut recover, mut discard) = (None, None);
-            let (closed, action) = crate::frame::window(egui::Id::unique("fc_recover"), "file.recover", "Recover", crate::frame::Width::Wide)
-                .actions("", "Close", (entries.len() > 1).then_some("Discard All"))
-                .show(ctx, true, |ui| {
-                    if entries.is_empty() {
-                        note(ui, "No autosaved models to recover.");
-                    }
-                    // Names, ages and sizes whole: the kit's window body truncates text by default.
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                    egui::Grid::new("fc_recover_grid").num_columns(4).spacing(egui::vec2(10.0, 4.0)).show(ui, |ui| {
-                        for e in &entries {
-                            let id = e.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-                            let path = e.get("path").and_then(Value::as_str);
-                            let n = |k: &str| e.get(k).and_then(Value::as_u64).unwrap_or(0);
-                            let name = ui.label(path.map_or_else(|| "Untitled".to_string(), file_name));
-                            if let Some(path) = path {
-                                name.backing_on_hover_text(path);
-                            }
-                            ui.label(egui::RichText::new(ago(n("age"))).color(t.text_dim));
-                            ui.label(egui::RichText::new(format!("{} nodes, {} elements", n("nodes"), n("elements"))).color(t.text_dim));
-                            ui.horizontal(|ui| {
-                                if kit::button(ui, "Recover", kit::Button::Small).clicked() {
-                                    recover = Some(id.clone());
-                                }
-                                if kit::button(ui, "Discard", kit::Button::Small).clicked() {
-                                    discard = Some(id.clone());
-                                }
-                            });
-                            ui.end_row();
+            let (closed, action) =
+                crate::frame::window(egui::Id::unique("fc_recover"), "file.recover", crate::words::ts("Recover"), crate::frame::Width::Wide)
+                    .actions("", crate::words::ts("Close"), (entries.len() > 1).then_some(crate::words::ts("Discard All")))
+                    .show(ctx, true, |ui| {
+                        if entries.is_empty() {
+                            note(ui, crate::words::ts("No autosaved models to recover."));
                         }
+                        // Names, ages and sizes whole: the kit's window body truncates text by default.
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                        egui::Grid::new("fc_recover_grid").num_columns(4).spacing(egui::vec2(10.0, 4.0)).show(ui, |ui| {
+                            for e in &entries {
+                                let id = e.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+                                let path = e.get("path").and_then(Value::as_str);
+                                let n = |k: &str| e.get(k).and_then(Value::as_u64).unwrap_or(0);
+                                let name = ui.label(path.map_or_else(|| crate::words::ts("Untitled").to_string(), file_name));
+                                if let Some(path) = path {
+                                    name.backing_on_hover_text(path);
+                                }
+                                ui.label(egui::RichText::new(ago(n("age"))).color(t.text_dim));
+                                ui.label(
+                                    egui::RichText::new(crate::words::wfmt!("{} nodes, {} elements", n("nodes"), n("elements"))).color(t.text_dim),
+                                );
+                                ui.horizontal(|ui| {
+                                    if kit::button(ui, crate::words::ts("Recover"), kit::Button::Small).clicked() {
+                                        recover = Some(id.clone());
+                                    }
+                                    if kit::button(ui, crate::words::ts("Discard"), kit::Button::Small).clicked() {
+                                        discard = Some(id.clone());
+                                    }
+                                });
+                                ui.end_row();
+                            }
+                        });
                     });
-                });
             let discard_all = action == kit::Action::Apply;
             if let Some(id) = recover {
                 app.recover(&id);
@@ -1617,11 +1644,12 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
         }
         Some(Prompt::Samples) => {
             let mut open = None;
-            let (closed, action) = crate::frame::window(egui::Id::unique("fc_samples"), "file.sample", "Samples", crate::frame::Width::Wide)
-                .actions("", "Close", None)
-                .show(ctx, true, |ui| {
-                    crate::samples::grid(ui, Some((ctx.content_rect().height() * 0.6).max(160.0)), &mut open);
-                });
+            let (closed, action) =
+                crate::frame::window(egui::Id::unique("fc_samples"), "file.sample", crate::words::ts("Samples"), crate::frame::Width::Wide)
+                    .actions("", crate::words::ts("Close"), None)
+                    .show(ctx, true, |ui| {
+                        crate::samples::grid(ui, Some((ctx.content_rect().height() * 0.6).max(160.0)), &mut open);
+                    });
             if let Some(name) = open {
                 app.prompt = None;
                 app.open_sample(name);
@@ -1653,17 +1681,17 @@ pub fn file_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
     let key = |k: &str| crate::appbar::shortcut(k);
     let row = |ui: &mut egui::Ui, id: &str, label: &str, right: Option<&str>| crate::frame::menu_row(ui, id, label, right, true).clicked();
     let mut act: Option<Box<dyn FnOnce(&mut ModelApp)>> = None;
-    if row(ui, "file.new", "New", Some(&key("N"))) {
+    if row(ui, "file.new", crate::words::ts("New"), Some(&key("N"))) {
         act = Some(Box::new(|app| app.new_model()));
     }
-    if row(ui, "file.open", "Open…", Some(&key("O"))) {
+    if row(ui, "file.open", crate::words::ts("Open…"), Some(&key("O"))) {
         act = Some(Box::new(|app| app.open_dialog(None)));
     }
-    if row(ui, "file.sample", "Samples…", None) {
+    if row(ui, "file.sample", crate::words::ts("Samples…"), None) {
         act = Some(Box::new(|app| app.prompt = Some(Prompt::Samples)));
     }
     if !app.recent.paths.is_empty() {
-        crate::frame::menu_heading(ui, "Recent");
+        crate::frame::menu_heading(ui, crate::words::ts("Recent"));
         for (i, p) in app.recent.paths.iter().take(6).enumerate() {
             let name = file_name(p);
             if crate::frame::menu_row(ui, &format!("file.recent.{i}"), &name, None, true).backing_on_hover_text(p).clicked() {
@@ -1673,12 +1701,12 @@ pub fn file_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
         }
     }
     crate::frame::menu_separator(ui);
-    if row(ui, "file.save", "Save", Some(&key("S"))) {
+    if row(ui, "file.save", crate::words::ts("Save"), Some(&key("S"))) {
         act = Some(Box::new(|app| {
             app.save();
         }));
     }
-    if row(ui, "file.save_as", "Save As…", Some(&key("Shift+S"))) {
+    if row(ui, "file.save_as", crate::words::ts("Save As…"), Some(&key("Shift+S"))) {
         act = Some(Box::new(|app| {
             app.save_as();
         }));
@@ -1686,33 +1714,33 @@ pub fn file_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
     let packed = crate::frame::menu_row(
         ui,
         "file.save_packed",
-        "Save With Geometry Embedded…",
+        crate::words::ts("Save With Geometry Embedded…"),
         None,
         app.session.design.is_some() || !app.session.surfaces.is_empty(),
     )
-    .backing_on_hover_text(
+    .backing_on_hover_text(crate::words::ts(
         "Save As, with a copy of the design and imported meshes inside the file, so it opens anywhere: whoever you send it to gets your geometry too",
-    );
+    ));
     if packed.clicked() {
         act = Some(Box::new(|app| {
             app.save_packed();
         }));
     }
     crate::frame::menu_separator(ui);
-    if row(ui, "deck.read", "Read Deck…", None) {
+    if row(ui, "deck.read", crate::words::ts("Read Deck…"), None) {
         act = Some(Box::new(|app| {
             let _ = app.start("deck.read");
         }));
     }
-    if row(ui, "file.script", "Run Script…", None) {
+    if row(ui, "file.script", crate::words::ts("Run Script…"), None) {
         act = Some(Box::new(|app| app.run_script_dialog()));
     }
     // Each group behind a rule, as the others.
     crate::frame::menu_separator(ui);
-    crate::frame::menu_heading(ui, "Write Deck");
+    crate::frame::menu_heading(ui, crate::words::ts("Write Deck"));
     for c in fieldcraft_engine::catalogue::CATALOGUE.iter().filter(|c| c.panel == "Decks" && c.id != "deck.read") {
         let format = c.preset().get("format").and_then(Value::as_str).map(str::to_string);
-        let soon = c.milestone().map(|m| format!("soon · {m}"));
+        let soon = c.milestone().map(|m| crate::words::wfmt!("soon · {m}"));
         let enabled = format.is_some() && soon.is_none();
         if crate::frame::menu_row(ui, c.id, &format!("{}…", c.label), soon.as_deref(), enabled).backing_on_hover_text(c.tip).clicked()
             && let Some(f) = format
@@ -1721,8 +1749,8 @@ pub fn file_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
         }
     }
     crate::frame::menu_separator(ui);
-    if crate::frame::menu_row(ui, "file.recover", "Recover…", None, true)
-        .backing_on_hover_text("Models autosaved by an app that crashed or closed with unsaved changes")
+    if crate::frame::menu_row(ui, "file.recover", crate::words::ts("Recover…"), None, true)
+        .backing_on_hover_text(crate::words::ts("Models autosaved by an app that crashed or closed with unsaved changes"))
         .clicked()
     {
         act = Some(Box::new(|app| app.prompt = Some(Prompt::Recover)));

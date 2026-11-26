@@ -24,6 +24,7 @@ fieldcraft-engine = { workspace = true }
 fieldcraft-lbm-gpu = { workspace = true }
 fieldcraft-mesh-gpu = { workspace = true }
 fieldcraft-ui-egui = { workspace = true }
+solidcraft-ui-text = { workspace = true }
 fieldcraft-io = { workspace = true }
 fieldcraft-update = { workspace = true }
 rfd = { workspace = true }

@@ -126,6 +126,8 @@ pub(crate) fn bar(app: &mut ModelApp, ui: &mut egui::Ui, rect: Rect) {
                 "zoom" => app.nav == NavMode::Zoom,
                 _ => menu_key(key).is_some_and(|k| app.ui.menu.as_deref() == Some(k)),
             };
+            // The const keeps the English source; the bar reads it in the thread's language.
+            let (name, tip) = (crate::words::ts(name), crate::words::ts(tip));
             let tip = if key == "visual_style" { format!("{tip}: {}", app.ui.style.label()) } else { tip.into() };
             kit::nav_bar::SlotView {
                 index,
@@ -194,15 +196,15 @@ fn style_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
 /// The display menu (SolidCraft's View menu at the bar's end): what the view shows and the
 /// symbols' size, the projection, the panels, and the mouse preset.
 fn display_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
-    crate::frame::menu_heading(ui, "Show");
+    crate::frame::menu_heading(ui, crate::words::ts("Show"));
     // Checked menu rows: one text inset for the whole menu.
     let mut first = None;
     for (label, on) in [
-        ("Geometry", &mut app.ui.show_geometry),
-        ("Mesh", &mut app.ui.show_mesh),
-        ("Nodes", &mut app.ui.show_nodes),
-        ("Loads & BCs", &mut app.ui.show_loads),
-        ("Interactions", &mut app.ui.show_interactions),
+        (crate::words::ts("Geometry"), &mut app.ui.show_geometry),
+        (crate::words::ts("Mesh"), &mut app.ui.show_mesh),
+        (crate::words::ts("Nodes"), &mut app.ui.show_nodes),
+        (crate::words::ts("Loads & BCs"), &mut app.ui.show_loads),
+        (crate::words::ts("Interactions"), &mut app.ui.show_interactions),
     ] {
         let r = toggle_row(ui, label, on);
         first.get_or_insert(r.rect);
@@ -212,14 +214,19 @@ fn display_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
     }
     kit::scope(ui, |ui| {
         let (lo, hi) = fieldcraft_render::glyphs::SIZE_RANGE;
-        kit::row(ui, "Symbol size", |ui| {
-            kit::slider(ui, &mut app.ui.symbol_size, lo..=hi, kit::Slider { step: Some(1.0), format: |v| format!("{v:.0} pt"), ..Default::default() })
+        kit::row(ui, crate::words::ts("Symbol size"), |ui| {
+            kit::slider(
+                ui,
+                &mut app.ui.symbol_size,
+                lo..=hi,
+                kit::Slider { step: Some(1.0), format: |v| crate::words::wfmt!("{v:.0} pt"), ..Default::default() },
+            )
         })
-        .backing_on_hover_text("The size of boundary condition, load and interaction symbols on screen, at any zoom");
+        .backing_on_hover_text(crate::words::ts("The size of boundary condition, load and interaction symbols on screen, at any zoom"));
     });
     crate::frame::menu_separator(ui);
-    crate::frame::menu_heading(ui, "Projection");
-    for (perspective, label) in [(false, "Orthographic"), (true, "Perspective")] {
+    crate::frame::menu_heading(ui, crate::words::ts("Projection"));
+    for (perspective, label) in [(false, crate::words::ts("Orthographic")), (true, crate::words::ts("Perspective"))] {
         let mut row = kit::MenuItem::new(label, label, "ui.perspective");
         row.checked = Some(app.ui.perspective == perspective);
         let r = row.show(ui);
@@ -231,20 +238,22 @@ fn display_menu(app: &mut ModelApp, ui: &mut egui::Ui) {
         }
     }
     crate::frame::menu_separator(ui);
-    toggle_row(ui, "Browser", &mut app.ui.show_tree);
-    toggle_row(ui, "Timeline", &mut app.ui.show_timeline);
+    toggle_row(ui, crate::words::ts("Browser"), &mut app.ui.show_tree);
+    toggle_row(ui, crate::words::ts("Timeline"), &mut app.ui.show_timeline);
     crate::frame::menu_separator(ui);
-    crate::frame::menu_heading(ui, "Navigation");
+    crate::frame::menu_heading(ui, crate::words::ts("Navigation"));
     kit::scope(ui, |ui| {
         let current = preset(&app.ui.nav_preset);
-        let labels: Vec<&str> = NAV_PRESETS.iter().map(|p| p.label).collect();
+        let labels: Vec<&str> = NAV_PRESETS.iter().map(|p| crate::words::ts(p.label)).collect();
         let mut selected = NAV_PRESETS.iter().position(|p| p.id == current.id).unwrap_or(0);
-        kit::choice_row(ui, "Preset", "fc_nav_preset", &mut selected, &labels).backing_on_hover_text(current.help);
+        kit::choice_row(ui, crate::words::ts("Preset"), "fc_nav_preset", &mut selected, &labels)
+            .backing_on_hover_text(crate::words::ts(current.help));
         if let Some(p) = NAV_PRESETS.get(selected).filter(|p| p.id != current.id) {
             app.ui.nav_preset = p.id.into();
             app.ui.reverse_zoom = p.reverse_zoom;
         }
-        kit::checkbox(ui, "Reverse zoom", &mut app.ui.reverse_zoom).backing_on_hover_text("The wheel zooms the other way");
+        kit::checkbox(ui, crate::words::ts("Reverse zoom"), &mut app.ui.reverse_zoom)
+            .backing_on_hover_text(crate::words::ts("The wheel zooms the other way"));
     });
 }
 

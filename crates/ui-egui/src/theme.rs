@@ -509,9 +509,33 @@ static ENGLISH_SOURCE: std::sync::LazyLock<String> = std::sync::LazyLock::new(||
     }
     serde_json::Value::Object(messages).to_string()
 });
+/// FieldCraft's Chinese text for the same ids: `locales/zh.json`, with the workspaces' lines
+/// and tab lists where the file has them (and the English ones, for an id it lacks).
+static ZH_SOURCE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let mut messages: serde_json::Map<String, serde_json::Value> = serde_json::from_str(include_str!("../locales/zh.json")).unwrap_or_default();
+    for w in fieldcraft_engine::catalogue::Workspace::ALL {
+        let (about, tabs) = crate::toolbar::workspace_ids(w);
+        messages.entry(about).or_insert_with(|| w.about().into());
+        messages.entry(tabs).or_insert_with(|| w.tabs().iter().map(|t| t.label()).collect::<Vec<_>>().join(" · ").into());
+    }
+    serde_json::Value::Object(messages).to_string()
+});
+
 static ENGLISH: std::sync::LazyLock<solidcraft_ui_text::Catalog> =
     std::sync::LazyLock::new(|| solidcraft_ui_text::Catalog::new("en", "English", ENGLISH_SOURCE.as_str()));
-static MESSAGES: std::sync::LazyLock<[&'static solidcraft_ui_text::Catalog; 1]> = std::sync::LazyLock::new(|| [&*ENGLISH]);
+static ZH: std::sync::LazyLock<solidcraft_ui_text::Catalog> =
+    std::sync::LazyLock::new(|| solidcraft_ui_text::Catalog::new("zh", "中文", ZH_SOURCE.as_str()));
+/// The installed catalogues: English first (the fallback), then Chinese.
+static MESSAGES: std::sync::LazyLock<[&'static solidcraft_ui_text::Catalog; 2]> = std::sync::LazyLock::new(|| [&*ENGLISH, &*ZH]);
+
+/// The language a process starts in when its flags do not choose one (`--lang` in the desktop app
+/// and the render server): `FIELDCRAFT_LANG`, else Chinese. Only `en` and `zh` are built in.
+pub fn language_preference() -> &'static str {
+    match std::env::var("FIELDCRAFT_LANG").ok().as_deref() {
+        Some("en") => "en",
+        _ => "zh",
+    }
+}
 
 /// SolidCraft's look installed into the kit, once per process: FieldCraft's icon set (SolidCraft's
 /// with ours, [`crate::icons::SET`]), SolidCraft's code-drawn glyphs and its built-in themes, and
@@ -672,6 +696,27 @@ mod tests {
         assert!(!ids.is_empty(), "no message id found in the kit's sources");
         let missing: Vec<&String> = ids.iter().filter(|id| !english.contains_key(id.as_str())).collect();
         assert!(missing.is_empty(), "kit message ids without English in locales/en.json: {missing:?}");
+    }
+
+    /// Every id `locales/en.json` holds has Chinese in `locales/zh.json`, and so does every
+    /// workspace line the catalogue adds at runtime.
+    #[test]
+    fn every_english_message_has_chinese() {
+        let english: serde_json::Map<String, serde_json::Value> = serde_json::from_str(include_str!("../locales/en.json")).expect("en.json is JSON");
+        let chinese: serde_json::Map<String, serde_json::Value> = serde_json::from_str(include_str!("../locales/zh.json")).expect("zh.json is JSON");
+        let missing: Vec<&String> = english.keys().filter(|id| !chinese.contains_key(*id)).collect();
+        assert!(missing.is_empty(), "ids without Chinese in locales/zh.json: {missing:?}");
+        for w in fieldcraft_engine::catalogue::Workspace::ALL {
+            for id in workspace_ids_for_test(w) {
+                assert!(chinese.contains_key(id), "{id} has no Chinese");
+            }
+        }
+    }
+
+    /// A workspace's two catalogue ids ([`crate::toolbar::workspace_ids`]).
+    fn workspace_ids_for_test(w: fieldcraft_engine::catalogue::Workspace) -> [&'static str; 2] {
+        let (about, tabs) = crate::toolbar::workspace_ids(w);
+        [about, tabs]
     }
 
     /// The label font is used only once the context has it; before that, the default font.

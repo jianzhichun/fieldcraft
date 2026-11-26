@@ -93,26 +93,26 @@ pub fn tip(target: &Target, action: &Action) -> Option<String> {
         Target::Seed(_) => "seed".to_string(),
         Target::View(_) => Saved::View.label().to_lowercase(),
         Target::Render(_) => Saved::Render.label().to_lowercase(),
-        Target::RigidWall { .. } => "rigid wall".to_string(),
+        Target::RigidWall { .. } => crate::words::ts("rigid wall").to_string(),
     };
     let tip = match (action, target) {
         (Action::Edit, Target::Body(_) | Target::Surface(_) | Target::View(_)) => return None,
-        (Action::Edit, Target::Render(_)) => format!("Change this {noun} in its form: saving replaces it"),
-        (Action::Edit, _) => format!("Change this {noun} in its form"),
-        (Action::Apply, Target::Def(..)) => format!("Apply this {noun} to the mesh, in its form"),
-        (Action::Rename, Target::Def(..)) => format!("Rename this {noun}: every definition that refers to it follows"),
-        (Action::Suppress(true), Target::Def(..)) => format!("Keep this {noun}, but leave it out of the model"),
-        (Action::Suppress(false), Target::Def(..)) => format!("Bring this {noun} back into the model"),
-        (Action::Restore, Target::View(_)) => "Show the model as this view saved it".to_string(),
-        (Action::Hide, _) => format!("Hide this {noun} in the viewport"),
-        (Action::Show, _) => format!("Show this {noun} in the viewport"),
-        (Action::Isolate, _) => format!("Show only this {noun}"),
-        (Action::ShowAll, _) => "Show everything that is hidden".to_string(),
-        (Action::Active { step, .. }, Target::Def(..)) => format!("Apply this {noun} in step {step}, or leave it out of that step"),
+        (Action::Edit, Target::Render(_)) => crate::words::wfmt!("Change this {noun} in its form: saving replaces it"),
+        (Action::Edit, _) => crate::words::wfmt!("Change this {noun} in its form"),
+        (Action::Apply, Target::Def(..)) => crate::words::wfmt!("Apply this {noun} to the mesh, in its form"),
+        (Action::Rename, Target::Def(..)) => crate::words::wfmt!("Rename this {noun}: every definition that refers to it follows"),
+        (Action::Suppress(true), Target::Def(..)) => crate::words::wfmt!("Keep this {noun}, but leave it out of the model"),
+        (Action::Suppress(false), Target::Def(..)) => crate::words::wfmt!("Bring this {noun} back into the model"),
+        (Action::Restore, Target::View(_)) => crate::words::ts("Show the model as this view saved it").to_string(),
+        (Action::Hide, _) => crate::words::wfmt!("Hide this {noun} in the viewport"),
+        (Action::Show, _) => crate::words::wfmt!("Show this {noun} in the viewport"),
+        (Action::Isolate, _) => crate::words::wfmt!("Show only this {noun}"),
+        (Action::ShowAll, _) => crate::words::ts("Show everything that is hidden").to_string(),
+        (Action::Active { step, .. }, Target::Def(..)) => crate::words::wfmt!("Apply this {noun} in step {step}, or leave it out of that step"),
         (Action::Delete, Target::Body(_) | Target::Surface(_)) => return None,
-        (Action::Delete, Target::Def(..)) => format!("Delete this {noun}: asks first, listing what uses it (Delete key)"),
-        (Action::Delete, Target::View(_) | Target::Render(_)) => format!("Delete this {noun}: asks first"),
-        (Action::Delete, Target::Seed(_) | Target::RigidWall { .. }) => format!("Delete this {noun} (undo brings it back)"),
+        (Action::Delete, Target::Def(..)) => crate::words::wfmt!("Delete this {noun}: asks first, listing what uses it (Delete key)"),
+        (Action::Delete, Target::View(_) | Target::Render(_)) => crate::words::wfmt!("Delete this {noun}: asks first"),
+        (Action::Delete, Target::Seed(_) | Target::RigidWall { .. }) => crate::words::wfmt!("Delete this {noun} (undo brings it back)"),
         (Action::Apply | Action::Rename | Action::Suppress(_) | Action::Restore | Action::Active { .. }, _) => return None,
     };
     Some(tip)
@@ -123,8 +123,8 @@ pub fn tip(target: &Target, action: &Action) -> Option<String> {
 /// for a rigid wall its step no longer has.
 pub fn disabled_tip(target: &Target, action: &Action) -> Option<&'static str> {
     match (action, target) {
-        (Action::Edit, Target::Def(..)) => Some("Not editable: delete it and make it again"),
-        (Action::Edit, Target::RigidWall { .. }) => Some("Its step no longer has this rigid wall"),
+        (Action::Edit, Target::Def(..)) => Some(crate::words::ts("Not editable: delete it and make it again")),
+        (Action::Edit, Target::RigidWall { .. }) => Some(crate::words::ts("Its step no longer has this rigid wall")),
         _ => None,
     }
 }
@@ -148,37 +148,37 @@ pub fn show(app: &ModelApp, ui: &mut egui::Ui, target: &Target) -> Option<Action
         }
     };
     if let Target::Def(def, name) = target {
-        entry(ui, def.edit_command(&app.session.model, name).is_some(), "Edit…", Action::Edit);
+        entry(ui, def.edit_command(&app.session.model, name).is_some(), crate::words::ts("Edit…"), Action::Edit);
         if def.apply(&app.session.model, name).is_some() {
-            entry(ui, true, "Apply…", Action::Apply);
+            entry(ui, true, crate::words::ts("Apply…"), Action::Apply);
         }
         if def.rename_kind().is_some() {
-            entry(ui, true, "Rename…", Action::Rename);
+            entry(ui, true, crate::words::ts("Rename…"), Action::Rename);
         }
         if let Some((_, suppressed)) = suppression(app, *def, name) {
-            entry(ui, true, if suppressed { "Unsuppress" } else { "Suppress" }, Action::Suppress(!suppressed));
+            entry(ui, true, if suppressed { crate::words::ts("Unsuppress") } else { crate::words::ts("Suppress") }, Action::Suppress(!suppressed));
         }
     }
     match target {
-        Target::Seed(_) | Target::Render(_) => entry(ui, true, "Edit…", Action::Edit),
-        Target::View(_) => entry(ui, true, "Restore", Action::Restore),
-        Target::RigidWall { step, index } => entry(ui, rigid_wall_params(app, step, *index).is_some(), "Edit…", Action::Edit),
+        Target::Seed(_) | Target::Render(_) => entry(ui, true, crate::words::ts("Edit…"), Action::Edit),
+        Target::View(_) => entry(ui, true, crate::words::ts("Restore"), Action::Restore),
+        Target::RigidWall { step, index } => entry(ui, rigid_wall_params(app, step, *index).is_some(), crate::words::ts("Edit…"), Action::Edit),
         Target::Def(..) | Target::Body(_) | Target::Surface(_) => {}
     }
     if let Some(item) = target.item() {
         if app.session.shows(item.kind, &item.name) {
-            entry(ui, true, "Hide", Action::Hide);
+            entry(ui, true, crate::words::ts("Hide"), Action::Hide);
         } else {
-            entry(ui, true, "Show", Action::Show);
+            entry(ui, true, crate::words::ts("Show"), Action::Show);
         }
-        entry(ui, true, "Isolate", Action::Isolate);
+        entry(ui, true, crate::words::ts("Isolate"), Action::Isolate);
     }
     if !app.session.view.is_empty() {
-        entry(ui, true, "Show All", Action::ShowAll);
+        entry(ui, true, crate::words::ts("Show All"), Action::ShowAll);
     }
     let steps = activity(app, target);
     if !steps.is_empty() {
-        let mut item = kit::MenuItem::new("active_in_step", "Active in step", "model.step.activate");
+        let mut item = kit::MenuItem::new("active_in_step", crate::words::ts("Active in step"), "model.step.activate");
         item.submenu = true;
         kit::Menu::item_button(ui, &item, |ui| {
             kit::scope(ui, |ui| {
@@ -199,7 +199,8 @@ pub fn show(app: &ModelApp, ui: &mut egui::Ui, target: &Target) -> Option<Action
     }
     if let Some(hover) = tip(target, &Action::Delete) {
         kit::Menu::separator(ui);
-        let label = if matches!(target, Target::Seed(_) | Target::RigidWall { .. }) { "Delete" } else { "Delete…" };
+        let label =
+            if matches!(target, Target::Seed(_) | Target::RigidWall { .. }) { crate::words::ts("Delete") } else { crate::words::ts("Delete…") };
         let mut row = kit::MenuItem::new("delete", label, "");
         row.danger = true;
         if row.show(ui).backing_on_hover_text(hover).clicked() {
@@ -362,8 +363,8 @@ pub enum Saved {
 impl Saved {
     pub fn label(self) -> &'static str {
         match self {
-            Saved::View => "Saved view",
-            Saved::Render => "Render",
+            Saved::View => crate::words::ts("Saved view"),
+            Saved::Render => crate::words::ts("Render"),
         }
     }
 
@@ -432,8 +433,8 @@ impl DeleteAsk {
             return None;
         }
         match self.steps.as_slice() {
-            [one] => Some(format!("Deactivate in step {one}")),
-            many => Some(format!("Deactivate in {} steps", many.len())),
+            [one] => Some(crate::words::wfmt!("Deactivate in step {one}")),
+            many => Some(crate::words::wfmt!("Deactivate in {} steps", many.len())),
         }
     }
 
@@ -441,9 +442,9 @@ impl DeleteAsk {
     pub fn question(&self) -> String {
         let what = format!("{} `{}`", self.kind.label().to_lowercase(), self.name);
         match (self.users.is_empty(), self.cascades()) {
-            (true, _) => format!("Delete {what}?"),
-            (false, true) => format!("Delete {what} and what uses it: {}?", self.users.join(", ")),
-            (false, false) => format!("{what} is used by {}: change or delete those first.", self.users.join(", ")),
+            (true, _) => crate::words::wfmt!("Delete {what}?"),
+            (false, true) => crate::words::wfmt!("Delete {what} and what uses it: {}?", self.users.join(", ")),
+            (false, false) => crate::words::wfmt!("{what} is used by {}: change or delete those first.", self.users.join(", ")),
         }
     }
 }
@@ -471,7 +472,7 @@ impl ModelApp {
         let view = &self.session.view;
         let users: Vec<String> = match kind {
             Saved::View if view.saved(name).is_some() => {
-                view.renders.iter().filter(|r| r.view == name).map(|r| format!("render `{}`", r.name)).collect()
+                view.renders.iter().filter(|r| r.view == name).map(|r| crate::words::wfmt!("render `{}`", r.name)).collect()
             }
             Saved::Render if view.render(name).is_some() => Vec::new(),
             Saved::View | Saved::Render => return,

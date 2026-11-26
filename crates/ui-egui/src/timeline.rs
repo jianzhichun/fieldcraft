@@ -110,9 +110,9 @@ impl ModelApp {
         let (undo, redo) = self.session.undo_depth();
         let done = self.session.journal.len();
         if target < done.saturating_sub(undo) {
-            self.set_status(format!("That command is {BEYOND_HISTORY}"), false);
+            self.set_status(crate::words::wfmt!("That command is {BEYOND_HISTORY}", BEYOND_HISTORY = crate::words::ts(BEYOND_HISTORY)), false);
         } else if target > done + redo {
-            self.set_status("Nothing to redo", false);
+            self.set_status(crate::words::ts("Nothing to redo"), false);
         } else if target != done {
             let step = if target < done { "edit.undo" } else { "edit.redo" };
             // An error shows in the status bar.
@@ -126,9 +126,12 @@ impl ModelApp {
         let done = self.session.journal.len();
         match roll {
             Roll::To(target) => self.roll_to(target),
-            Roll::Undo(_) if undo == 0 && done > 0 => self.set_status(format!("Nothing to undo: every command shown is {BEYOND_HISTORY}"), false),
-            Roll::Undo(_) if undo == 0 => self.set_status("Nothing to undo", false),
-            Roll::Redo(_) if redo == 0 => self.set_status("Nothing to redo", false),
+            Roll::Undo(_) if undo == 0 && done > 0 => self.set_status(
+                crate::words::wfmt!("Nothing to undo: every command shown is {BEYOND_HISTORY}", BEYOND_HISTORY = crate::words::ts(BEYOND_HISTORY)),
+                false,
+            ),
+            Roll::Undo(_) if undo == 0 => self.set_status(crate::words::ts("Nothing to undo"), false),
+            Roll::Redo(_) if redo == 0 => self.set_status(crate::words::ts("Nothing to redo"), false),
             Roll::Undo(n) => self.roll_to(done.saturating_sub(n.min(undo))),
             Roll::Redo(n) => self.roll_to(done + n.min(redo)),
         }
@@ -145,9 +148,9 @@ fn describe(item: &Item) -> String {
     let text = match (def, name) {
         (Some((kind, verb)), Some(name)) => {
             let did = match verb {
-                "create" => "Add",
-                "edit" => "Edit",
-                _ => "Delete",
+                "create" => crate::words::ts("Add"),
+                "edit" => crate::words::ts("Edit"),
+                _ => crate::words::ts("Delete"),
             };
             format!("{did} {} {name}", kind.label().to_lowercase())
         }
@@ -194,9 +197,9 @@ fn paint_badge(p: &egui::Painter, item: Rect, b: Badge, t: &Tokens) {
 fn tip(item: &Item, reachable: bool) -> String {
     let mut s = describe(item);
     if reachable {
-        s.push_str("\nClick to roll the model to here");
+        s.push_str(crate::words::ts("\nClick to roll the model to here"));
     } else {
-        s.push_str(&format!("\nThis command is {BEYOND_HISTORY}"));
+        s.push_str(&crate::words::wfmt!("\nThis command is {BEYOND_HISTORY}", BEYOND_HISTORY = crate::words::ts(BEYOND_HISTORY)));
     }
     s
 }
@@ -226,7 +229,7 @@ fn header(ui: &mut egui::Ui, rect: Rect) -> Header {
     row.spacing_mut().item_spacing.x = 0.0;
     let mut handle = kit::panel_grip(&mut row).rect;
     row.add_space(t.space_8);
-    let heading = kit::StripHeading::new(row.painter(), "History");
+    let heading = kit::StripHeading::new(row.painter(), crate::words::ts("History"));
     if heading.width() + kit::history_transport_width() <= row.available_width() {
         handle = handle.union(heading.show(&mut row).rect);
     }
@@ -352,13 +355,13 @@ impl Steps<'_> {
                 }
             }
             let what = match (held, open) {
-                (true, _) => "shown one by one while the model stands among them",
-                (false, true) => "click to fold them",
-                (false, false) => "click to show each one",
+                (true, _) => crate::words::ts("shown one by one while the model stands among them"),
+                (false, true) => crate::words::ts("click to fold them"),
+                (false, false) => crate::words::ts("click to show each one"),
             };
-            let mut text = format!("{}: {} commands, {what}", describe(item), item.count());
+            let mut text = crate::words::wfmt!("{}: {} commands, {what}", describe(item), item.count());
             if item.end < oldest {
-                text.push_str(&format!("\nThese commands are {BEYOND_HISTORY}"));
+                text.push_str(&crate::words::wfmt!("\nThese commands are {BEYOND_HISTORY}", BEYOND_HISTORY = crate::words::ts(BEYOND_HISTORY)));
             }
             clicked = response.on_hover_cursor(egui::CursorIcon::PointingHand).backing_on_hover_text(text).clicked();
             rect.width()
@@ -505,7 +508,7 @@ fn contents(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, floating: bool) -
     let oldest = done.saturating_sub(undo);
     let accent = solidcraft_theme::TabAccent::current(ui.ctx());
     let bar = history_bar::Bar {
-        marker_tip: "The model is here: drag to roll it back or forward",
+        marker_tip: crate::words::ts("The model is here: drag to roll it back or forward"),
         accent,
         drag_accent: accent,
         // Slots are journal positions: the marker stands after the commands done.
@@ -532,7 +535,7 @@ fn contents(app: &mut ModelApp, ui: &mut egui::Ui, t: &Tokens, floating: bool) -
         ui.painter().text(
             pos2(head.x, r.center().y),
             Align2::LEFT_CENTER,
-            "Every command that changes the model appears here",
+            crate::words::ts("Every command that changes the model appears here"),
             FontId::proportional(k.font_label),
             k.text_dim,
         );

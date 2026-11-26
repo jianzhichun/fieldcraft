@@ -186,7 +186,7 @@ fn each_label(fields: &[Field], units: &DisplaySystem, depth: usize, out: &mut d
                 if f.key.is_empty() {
                     out(f.label, f.required, help);
                 } else {
-                    out("Type", true, help);
+                    out(crate::words::ts("Type"), true, help);
                 }
                 for v in variants {
                     each_label(v.fields, units, depth + 1, out);
@@ -263,8 +263,10 @@ impl Form<'_> {
         let reset = ui
             .horizontal_wrapped(|ui| {
                 ui.label(RichText::new(words).size(k.font_caption).color(self.style.dim))
-                    .backing_on_hover_text("A value of another shape (from a script); Reset starts the field again");
-                kit::button(ui, "Reset", kit::Button::Small).backing_on_hover_text("Clear it: the field takes its default").clicked()
+                    .backing_on_hover_text(crate::words::ts("A value of another shape (from a script); Reset starts the field again"));
+                kit::button(ui, crate::words::ts("Reset"), kit::Button::Small)
+                    .backing_on_hover_text(crate::words::ts("Clear it: the field takes its default"))
+                    .clicked()
             })
             .inner;
         reset.then_some(Value::Null)
@@ -357,7 +359,7 @@ impl Form<'_> {
                     self.touch(&path);
                 }
                 if is_name(f) && ui.data(|d| d.get_temp::<bool>(self.id(&path).with("spaced"))).unwrap_or(false) {
-                    fields::note(ui, &self.style, "Spaces become _ (names go into solver decks).", self.style.dim);
+                    fields::note(ui, &self.style, crate::words::ts("Spaces become _ (names go into solver decks)."), self.style.dim);
                 }
                 if let Some(note) = f.note(obj.get(f.key).and_then(Value::as_str)) {
                     fields::note(ui, &self.style, note, self.style.dim);
@@ -605,7 +607,7 @@ impl Form<'_> {
         let names = self.names(c).to_vec();
         if names.is_empty() {
             ui.vertical(|ui| {
-                let none = format!("No {} yet", plural(c.label()));
+                let none = crate::words::wfmt!("No {} yet", plural(c.label()));
                 ui.add_enabled_ui(false, |ui| fields::combo(ui, id, current.as_deref().unwrap_or(&none), &[], fill(ui, &self.style)));
                 self.create_button(ui, c, path);
             });
@@ -629,19 +631,22 @@ impl Form<'_> {
         let list = |picked: Vec<String>| if picked.is_empty() { Value::Null } else { json!(picked) };
         ui.vertical(|ui| {
             if names.is_empty() {
-                ui.label(RichText::new(format!("No {} yet", plural(c.label()))).color(self.style.dim));
+                ui.label(RichText::new(crate::words::wfmt!("No {} yet", plural(c.label()))).color(self.style.dim));
                 self.create_button(ui, c, path);
             }
             // All, none and the others, for long lists.
             if shown.len() > 3 {
                 ui.horizontal(|ui| {
-                    if kit::button(ui, "All", kit::Button::Small).clicked() {
+                    if kit::button(ui, crate::words::ts("All"), kit::Button::Small).clicked() {
                         changed = Some(list(shown.to_vec()));
                     }
-                    if kit::button(ui, "None", kit::Button::Small).clicked() {
+                    if kit::button(ui, crate::words::ts("None"), kit::Button::Small).clicked() {
                         changed = Some(Value::Null);
                     }
-                    if kit::button(ui, "Invert", kit::Button::Small).backing_on_hover_text("Tick the unticked ones and untick the others").clicked() {
+                    if kit::button(ui, crate::words::ts("Invert"), kit::Button::Small)
+                        .backing_on_hover_text(crate::words::ts("Tick the unticked ones and untick the others"))
+                        .clicked()
+                    {
                         changed = Some(list(shown.iter().filter(|n| !chosen.contains(n)).cloned().collect()));
                     }
                 });
@@ -672,7 +677,7 @@ impl Form<'_> {
         let mut changed = None;
         ui.vertical(|ui| {
             if names.is_empty() {
-                ui.label(RichText::new(format!("No {} yet", plural(c.label()))).color(self.style.dim));
+                ui.label(RichText::new(crate::words::wfmt!("No {} yet", plural(c.label()))).color(self.style.dim));
             }
             for (i, n) in names.iter().take(MAX_ROWS).enumerate() {
                 let chosen = current.get(n).and_then(Value::as_str);
@@ -705,7 +710,7 @@ impl Form<'_> {
         let mut changed = None;
         ui.vertical(|ui| {
             if names.is_empty() {
-                ui.label(RichText::new(format!("No {} yet", plural(c.label()))).color(self.style.dim));
+                ui.label(RichText::new(crate::words::wfmt!("No {} yet", plural(c.label()))).color(self.style.dim));
             }
             for (i, n) in names.iter().take(MAX_ROWS).enumerate() {
                 let mut text = current.get(n).and_then(Value::as_str).unwrap_or_default().to_string();
@@ -811,7 +816,7 @@ impl Form<'_> {
                 for (i, v) in list.iter_mut().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(format!("{}", i + 1)).color(self.style.dim));
-                        if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text("Remove").clicked() {
+                        if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text(crate::words::ts("Remove")).clicked() {
                             remove = Some(i);
                         }
                     });
@@ -821,7 +826,7 @@ impl Form<'_> {
                         changed = true;
                     }
                 }
-                if list.len() < max.min(MAX_ROWS) && kit::button(ui, "+ Add", kit::Button::Small).clicked() {
+                if list.len() < max.min(MAX_ROWS) && kit::button(ui, crate::words::ts("+ Add"), kit::Button::Small).clicked() {
                     let start = schema::prefill(&[Field { key: "v", required: true, ..*item }], &json!({}));
                     list.push(start.get("v").cloned().unwrap_or(Value::Null));
                     changed = true;
@@ -961,13 +966,13 @@ impl Form<'_> {
         let mut text = obj.get(f.key).and_then(Value::as_str).unwrap_or_default().to_string();
         let style = self.style;
         let help = f.help_text(self.cx.units);
-        let tip = format!("The one {} selected in the view", entity.label());
+        let tip = crate::words::wfmt!("The one {} selected in the view", entity.label());
         let refused = found.as_ref().err().cloned().unwrap_or_default();
         let (typed, pick) = fields::row(ui, &style, f.label, f.required, &help, |ui| {
             let font = egui::TextStyle::Button.resolve(ui.style());
-            let button = crate::elide::width(ui, "Pick", &font) + 2.0 * ui.spacing().button_padding.x + ui.spacing().item_spacing.x;
+            let button = crate::elide::width(ui, crate::words::ts("Pick"), &font) + 2.0 * ui.spacing().button_padding.x + ui.spacing().item_spacing.x;
             let typed = fields::text(ui, id, &mut text, f.hint, (fill(ui, &style) - button).max(FIELD_MIN));
-            let pick = kit::button(ui, "Pick", kit::Button::Enabled(found.is_ok()))
+            let pick = kit::button(ui, crate::words::ts("Pick"), kit::Button::Enabled(found.is_ok()))
                 .backing_on_hover_text(&tip)
                 .backing_on_disabled_hover_text(&refused)
                 .clicked();
@@ -993,7 +998,7 @@ impl Form<'_> {
     fn create_button(&mut self, ui: &mut Ui, c: Collection, path: &str) {
         let r = c.requirement();
         let text = match r.provider().ends_with(".create") {
-            true => format!("Create {}…", c.label()),
+            true => crate::words::wfmt!("Create {}…", c.label()),
             false => format!("{}…", crate::command_label(r.provider())),
         };
         // Where its command is on the ribbon, by its label: never the command's id.
@@ -1026,12 +1031,24 @@ impl Form<'_> {
         let empty = (!f.required).then(|| capitalised(if f.hint.is_empty() { "none" } else { f.hint }));
         let mut choices: Vec<&str> = empty.iter().map(String::as_str).collect();
         choices.extend([SELECTION, TYPED]);
+        // The two fixed choices read in the thread's language; the values stay the English
+        // constants the match arms below compare (and the hint above is already shown as typed).
+        let shown: Vec<&str> = choices
+            .iter()
+            .map(|c| match *c {
+                SELECTION => crate::words::ts(SELECTION),
+                TYPED => crate::words::ts(TYPED),
+                other => other,
+            })
+            .collect();
         let remembered = ui.data(|d| d.get_temp::<usize>(id.with("mode"))).filter(|&m| m < choices.len());
         let typed_at = choices.len() - 1;
         let mode = remembered.unwrap_or(if current.is_empty() && empty.is_some() { 0 } else { typed_at });
         let mut out = None;
         let width = fill(ui, &self.style);
-        if let Some(m) = fields::combo(ui, id.with("choice"), choices.get(mode).copied().unwrap_or(TYPED), &choices, width).filter(|&m| m != mode) {
+        if let Some(m) =
+            fields::combo(ui, id.with("choice"), shown.get(mode).copied().unwrap_or(crate::words::ts(TYPED)), &shown, width).filter(|&m| m != mode)
+        {
             ui.data_mut(|d| d.insert_temp(id.with("mode"), m));
             match choices.get(m).copied() {
                 Some(SELECTION) => out = Some(as_value(&picked)),
@@ -1043,7 +1060,7 @@ impl Form<'_> {
         match choices.get(mode).copied() {
             Some(SELECTION) => {
                 let n = picked.len();
-                let note = format!("{n} {}{} picked in the view (Select: {}s)", of.label(), if n == 1 { "" } else { "s" }, of.label());
+                let note = crate::words::wfmt!("{n} {}{} picked in the view (Select: {}s)", of.label(), if n == 1 { "" } else { "s" }, of.label());
                 fields::note(ui, &Style { label_width: 0.0, ..self.style }, &note, self.style.dim);
                 (picked != current).then(|| as_value(&picked))
             }
@@ -1069,8 +1086,8 @@ impl Form<'_> {
             {
                 out = Some(if l.is_empty() { Value::Null } else { json!(l) });
             }
-            let label = format!("Use selection ({} {}{})", picked.len(), of.label(), if picked.len() == 1 { "" } else { "s" });
-            let tip = format!("The {}s picked in the viewport (Select: {}s)", of.label(), of.label());
+            let label = crate::words::wfmt!("Use selection ({} {}{})", picked.len(), of.label(), if picked.len() == 1 { "" } else { "s" });
+            let tip = crate::words::wfmt!("The {}s picked in the viewport (Select: {}s)", of.label(), of.label());
             if kit::button(ui, label, kit::Button::Enabled(!picked.is_empty()))
                 .backing_on_hover_text(&tip)
                 .backing_on_disabled_hover_text(&tip)
@@ -1115,8 +1132,8 @@ impl Form<'_> {
             }
             if side == schema::Side::Face {
                 let picked = self.cx.picked.faces.clone();
-                let label = format!("Use selection ({} face{})", picked.len(), if picked.len() == 1 { "" } else { "s" });
-                let tip = "The element faces picked in the viewport (Select: Element faces)";
+                let label = crate::words::wfmt!("Use selection ({} face{})", picked.len(), if picked.len() == 1 { "" } else { "s" });
+                let tip = crate::words::ts("The element faces picked in the viewport (Select: Element faces)");
                 if kit::button(ui, label, kit::Button::Enabled(!picked.is_empty()))
                     .backing_on_hover_text(tip)
                     .backing_on_disabled_hover_text(tip)
@@ -1164,7 +1181,7 @@ impl Form<'_> {
             for (i, p) in current.iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = gap;
-                    if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text("Remove this row").clicked() {
+                    if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text(crate::words::ts("Remove this row")).clicked() {
                         remove = Some(i);
                     }
                     if let Some(v) = self.vector(ui, id.with(i), Some(p), f, columns, false, Some(cell))
@@ -1175,8 +1192,12 @@ impl Form<'_> {
                     }
                 });
             }
-            if kit::button(ui, if columns == schema::XYZ { "Add point" } else { "Add row" }, kit::Button::Enabled(current.len() < max.min(MAX_ROWS)))
-                .clicked()
+            if kit::button(
+                ui,
+                if columns == schema::XYZ { crate::words::ts("Add point") } else { crate::words::ts("Add row") },
+                kit::Button::Enabled(current.len() < max.min(MAX_ROWS)),
+            )
+            .clicked()
             {
                 next.push(Value::Array(vec![json!(0.0); columns.len()]));
                 changed = true;
@@ -1216,7 +1237,7 @@ impl Form<'_> {
         let mut on = auto;
         let mut out = None;
         ui.horizontal(|ui| {
-            if kit::checkbox(ui, "Auto", &mut on).changed() {
+            if kit::checkbox(ui, crate::words::ts("Auto"), &mut on).changed() {
                 out = Some(if on { json!("auto") } else { json!(1.0) });
             }
             if !auto {
@@ -1238,7 +1259,10 @@ impl Form<'_> {
         let mut on = split;
         let mut out = None;
         ui.vertical(|ui| {
-            if kit::checkbox(ui, "Per axis", &mut on).backing_on_hover_text("A different value along each axis").changed() {
+            if kit::checkbox(ui, crate::words::ts("Per axis"), &mut on)
+                .backing_on_hover_text(crate::words::ts("A different value along each axis"))
+                .changed()
+            {
                 out = Some(match (on, value) {
                     (true, Some(v)) if v.is_number() => Value::Array(vec![v.clone(); labels.len()]),
                     (true, _) => Value::Null,
@@ -1314,7 +1338,7 @@ impl Form<'_> {
                         return;
                     };
                     let current = child.get(tag).and_then(Value::as_str).map(str::to_string);
-                    let row = Field { label: "Type", required: true, ..*f };
+                    let row = Field { label: crate::words::ts("Type"), required: true, ..*f };
                     let tag_path = join(path, tag);
                     if let Some(t) = self.variant_choice(ui, &row, variants, current.as_deref(), &tag_path) {
                         *child = schema::switch_variant(f, &[], child, &t);
@@ -1346,7 +1370,7 @@ impl Form<'_> {
         for (i, row) in list.iter_mut().enumerate().take(max) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(format!("{}", i + 1)).small().color(self.style.dim));
-                if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text("Remove").clicked() {
+                if kit::button(ui, "×", kit::Button::Small).backing_on_hover_text(crate::words::ts("Remove")).clicked() {
                     remove = Some(i);
                 }
             });
@@ -1358,7 +1382,7 @@ impl Form<'_> {
             list.remove(i);
             self.touch(path);
         }
-        if list.len() < max && kit::button(ui, "+ Add", kit::Button::Small).clicked() {
+        if list.len() < max && kit::button(ui, crate::words::ts("+ Add"), kit::Button::Small).clicked() {
             list.push(schema::prefill(fields, &json!({})));
             self.touch(path);
         }

@@ -44,6 +44,8 @@ Flags:
   --theme <MODE>         dark, light or auto (default auto). `auto` follows the page's `theme`
                          messages (the host's own light/dark switch); dark/light are fixed and
                          ignore them.
+  --lang <zh|en>         Interface language (default zh; `FIELDCRAFT_LANG` sets it too; `en`
+                         keeps the English interface). `ui.language` changes it at runtime.
   --read-only <REASON>   Open the session read-only: saving, undo/redo, opening or replacing the
                          document, deck import/export and the export/image writers are refused
                          with `EngineError::Disabled`, and a model edit is undone (and, where a
@@ -55,12 +57,12 @@ Flags:
 
 Environment:
   FIELDCRAFT_GPU         auto (default), hardware, software, cpu. `cpu` cannot stream frames.
-  FIELDCRAFT_RENDER_PORT / FIELDCRAFT_RENDER_TOKEN / FIELDCRAFT_READ_ONLY as above.
+  FIELDCRAFT_RENDER_PORT / FIELDCRAFT_RENDER_TOKEN / FIELDCRAFT_READ_ONLY / FIELDCRAFT_LANG as above.
 
 The protocol (message by message, with the mapping to egui events) is PROTOCOL.md.
 ";
 
-/// The flags, parsed by hand (the server has eight and no other reason to take a dependency).
+/// The flags, parsed by hand (the server has nine and no other reason to take a dependency).
 #[derive(Debug, Default)]
 struct Args {
     port: u16,
@@ -72,6 +74,7 @@ struct Args {
     open: Option<String>,
     fps_cap: f32,
     theme: ThemeMode,
+    language: &'static str,
 }
 
 impl Args {
@@ -83,6 +86,7 @@ impl Args {
             height: 800.0,
             dpr: 1.0,
             fps_cap: 60.0,
+            language: fieldcraft_ui_egui::theme::language_preference(),
             ..Default::default()
         };
         let mut argv = argv;
@@ -99,6 +103,13 @@ impl Args {
                 "--open" => args.open = Some(value()?),
                 "--fps-cap" => args.fps_cap = value()?.parse().map_err(|_| "`--fps-cap` must be a number".to_string())?,
                 "--theme" => args.theme = ThemeMode::parse(&value()?)?,
+                "--lang" => {
+                    args.language = match value()?.as_str() {
+                        "zh" => "zh",
+                        "en" => "en",
+                        other => return Err(format!("`--lang` must be `zh` or `en` (got `{other}`)")),
+                    }
+                }
                 other => return Err(format!("unknown flag `{other}` (try --help)")),
             }
         }
@@ -175,7 +186,8 @@ fn run() -> Result<(), String> {
     let gpu = gpu::Gpu::new(policy, width, height, dark)?;
     let (stream, peer) = listener.accept().map_err(|e| format!("accepting a connection: {e}"))?;
     log::info!("serving {} (dpr {dpr_used})", peer);
-    let config = Config { width: args.width, height: args.height, dpr: args.dpr, fps_cap: args.fps_cap, dark, theme: args.theme };
+    let config =
+        Config { width: args.width, height: args.height, dpr: args.dpr, fps_cap: args.fps_cap, dark, theme: args.theme, language: args.language };
     let mut host = Host::new(Session::default(), config, Box::new(gpu))?;
     if let Some(path) = &args.open {
         host.open(path)?;
@@ -218,6 +230,8 @@ mod tests {
             "m.fieldcraft",
             "--token-file",
             "t",
+            "--lang",
+            "en",
         ])
         .unwrap()
         .unwrap();
@@ -225,10 +239,12 @@ mod tests {
         assert_eq!(a.read_only.as_deref(), Some("trial"));
         assert_eq!(a.open.as_deref(), Some("m.fieldcraft"));
         assert_eq!(a.token_file.as_deref(), Some("t"));
+        assert_eq!(a.language, "en");
         assert!(parse(&["--help"]).unwrap().is_none());
         assert!(parse(&["--nope"]).unwrap_err().contains("unknown flag"));
         assert!(parse(&["--port"]).unwrap_err().contains("needs a value"));
         assert!(parse(&["--port", "x"]).unwrap_err().contains("0..=65535"));
+        assert!(parse(&["--lang", "fr"]).unwrap_err().contains("`--lang` must be"));
     }
 
     #[test]

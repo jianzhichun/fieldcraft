@@ -162,15 +162,15 @@ fn contents<'a>(app: &'a ModelApp, ctx: &egui::Context, interactive: bool) -> Pa
     };
     let section = app.start_page.section;
     let mut rail = vec![
-        entry("start:start", "Start", String::new(), section == Section::Start, Action::Section(Section::Start)),
-        entry("start:new", "New", key("N"), false, Action::New),
-        entry("start:open", "Open…", key("O"), false, Action::Open(None)),
+        entry("start:start", crate::words::ts("Start"), String::new(), section == Section::Start, Action::Section(Section::Start)),
+        entry("start:new", crate::words::ts("New"), key("N"), false, Action::New),
+        entry("start:open", crate::words::ts("Open…"), key("O"), false, Action::Open(None)),
         RailItem::Separator,
-        entry("start:recover", "Recover", String::new(), section == Section::Recover, Action::Section(Section::Recover)),
+        entry("start:recover", crate::words::ts("Recover"), String::new(), section == Section::Recover, Action::Section(Section::Recover)),
         RailItem::Separator,
-        entry("start:settings", "Settings…", String::new(), false, Action::Settings),
-        entry("start:crash_reports", "Crash Reports…", String::new(), false, Action::CrashReports),
-        entry("start:report_bug", "Report a Bug…", String::new(), false, Action::ReportBug),
+        entry("start:settings", crate::words::ts("Settings…"), String::new(), false, Action::Settings),
+        entry("start:crash_reports", crate::words::ts("Crash Reports…"), String::new(), false, Action::CrashReports),
+        entry("start:report_bug", crate::words::ts("Report a Bug…"), String::new(), false, Action::ReportBug),
     ];
     // An embedded window (the render server) has no Report a bug entry.
     if app.embedded {
@@ -180,24 +180,24 @@ fn contents<'a>(app: &'a ModelApp, ctx: &egui::Context, interactive: bool) -> Pa
     let error = app.status.as_ref().filter(|s| s.error).map(|s| Cow::from(s.text.as_str()));
     let (title, hint, body) = match section {
         Section::Start => (
-            "Start",
-            "Open a model, a SolidCraft design or a tagged mesh, or drop one here. The samples are ready to solve.",
+            crate::words::ts("Start"),
+            crate::words::ts("Open a model, a SolidCraft design or a tagged mesh, or drop one here. The samples are ready to solve."),
             Body::Start(Box::new(start(app, ctx))),
         ),
         Section::Recover => (
-            "Recover",
-            "Models autosaved by a FieldZ that crashed or closed with unsaved changes.",
+            crate::words::ts("Recover"),
+            crate::words::ts("Models autosaved by a FieldZ that crashed or closed with unsaved changes."),
             Body::Reviews(recover(app.start_page.recoverable.as_deref().unwrap_or_default())),
         ),
     };
     Page {
         id: "start",
-        name: "Start".into(),
+        name: crate::words::ts("Start").into(),
         interactive,
         back: Some(Back {
-            template: "Back to {name}".into(),
+            template: crate::words::ts("Back to {name}").into(),
             document: app.model_name().into(),
-            shortcut: "Esc".into(),
+            shortcut: crate::words::ts("Esc").into(),
             chosen: Action::Back,
             // Esc is the host's: it closes what is over the page first (below).
             escape: false,
@@ -222,11 +222,46 @@ fn start<'a>(app: &'a ModelApp, ctx: &egui::Context) -> Start<'a, Action> {
     };
     let open_key = crate::appbar::shortcut("O");
     let actions = vec![
-        tile("start:tile:new", "new", "New model", "Empty: add geometry, a mesh and the setup".into(), true, Action::New),
-        tile("start:tile:open", "open", "Open…", format!("A model, a design or a mesh ({open_key})"), false, Action::Open(None)),
-        tile("start:tile:design", "open", "Open design…", "A SolidCraft design, to mesh and set up".into(), false, Action::Open(Some(Kind::Design))),
-        tile("start:tile:mesh", "import", "Import mesh…", "A face-tagged 3MF surface mesh".into(), false, Action::Open(Some(Kind::Mesh))),
-        tile("start:tile:deck", "import", "Read deck…", "An Abaqus, Nastran or LS-DYNA input deck".into(), false, Action::ReadDeck),
+        tile(
+            "start:tile:new",
+            "new",
+            crate::words::ts("New model"),
+            crate::words::ts("Empty: add geometry, a mesh and the setup").into(),
+            true,
+            Action::New,
+        ),
+        tile(
+            "start:tile:open",
+            "open",
+            crate::words::ts("Open…"),
+            crate::words::wfmt!("A model, a design or a mesh ({open_key})"),
+            false,
+            Action::Open(None),
+        ),
+        tile(
+            "start:tile:design",
+            "open",
+            crate::words::ts("Open design…"),
+            crate::words::ts("A SolidCraft design, to mesh and set up").into(),
+            false,
+            Action::Open(Some(Kind::Design)),
+        ),
+        tile(
+            "start:tile:mesh",
+            "import",
+            crate::words::ts("Import mesh…"),
+            crate::words::ts("A face-tagged 3MF surface mesh").into(),
+            false,
+            Action::Open(Some(Kind::Mesh)),
+        ),
+        tile(
+            "start:tile:deck",
+            "import",
+            crate::words::ts("Read deck…"),
+            crate::words::ts("An Abaqus, Nastran or LS-DYNA input deck").into(),
+            false,
+            Action::ReadDeck,
+        ),
     ];
     let recent = app.recent.paths.iter().map(|path| recent_row(path)).collect();
     let samples = crate::samples::ordered()
@@ -241,12 +276,12 @@ fn start<'a>(app: &'a ModelApp, ctx: &egui::Context) -> Start<'a, Action> {
         .collect();
     Start {
         banner: None,
-        actions_title: "New".into(),
+        actions_title: crate::words::ts("New").into(),
         actions: Tiles { grid: "fc_start_new", tiles: actions },
-        recent_title: "Recent".into(),
-        recent_empty: "Models, designs and meshes you open or save are listed here.".into(),
+        recent_title: crate::words::ts("Recent").into(),
+        recent_empty: crate::words::ts("Models, designs and meshes you open or save are listed here.").into(),
         recent,
-        samples_title: "Samples".into(),
+        samples_title: crate::words::ts("Samples").into(),
         samples,
     }
 }
@@ -255,10 +290,10 @@ fn start<'a>(app: &'a ModelApp, ctx: &egui::Context) -> Start<'a, Action> {
 fn recent_row(path: &str) -> Recent<'static, Action> {
     let folder = std::path::Path::new(path).parent().map(|p| p.display().to_string()).unwrap_or_default();
     let kind = match Kind::of(path) {
-        Some(Kind::Model) => "Model",
-        Some(Kind::Design) => "SolidCraft design",
-        Some(Kind::Mesh) => "Tagged mesh",
-        Some(Kind::Orphan) => "Orphan mesh",
+        Some(Kind::Model) => crate::words::ts("Model"),
+        Some(Kind::Design) => crate::words::ts("SolidCraft design"),
+        Some(Kind::Mesh) => crate::words::ts("Tagged mesh"),
+        Some(Kind::Orphan) => crate::words::ts("Orphan mesh"),
         None => "",
     };
     Recent {
@@ -282,17 +317,17 @@ fn recover(entries: &[Value]) -> Reviews<'static, Action> {
         .filter_map(|e| {
             let id = e.get("id").and_then(Value::as_str)?.to_string();
             let n = |k: &str| e.get(k).and_then(Value::as_u64).unwrap_or(0);
-            let title = e.get("path").and_then(Value::as_str).map_or_else(|| "Untitled".to_string(), files::file_name);
-            let detail = format!("Autosaved {} · {} nodes, {} elements", files::ago(n("age")), n("nodes"), n("elements"));
+            let title = e.get("path").and_then(Value::as_str).map_or_else(|| crate::words::ts("Untitled").to_string(), files::file_name);
+            let detail = crate::words::wfmt!("Autosaved {} · {} nodes, {} elements", files::ago(n("age")), n("nodes"), n("elements"));
             Some(Review {
                 title: title.into(),
                 detail: detail.into(),
-                recover: ("Recover".into(), Action::Recover(id.clone())),
-                discard: ("Discard".into(), Action::Discard(id)),
+                recover: (crate::words::ts("Recover").into(), Action::Recover(id.clone())),
+                discard: (crate::words::ts("Discard").into(), Action::Discard(id)),
             })
         })
         .collect();
-    Reviews { empty: "No autosaved models to recover.".into(), items }
+    Reviews { empty: crate::words::ts("No autosaved models to recover.").into(), items }
 }
 
 /// Run the entry chosen. What opens a document or a form leaves the page up until it lands
