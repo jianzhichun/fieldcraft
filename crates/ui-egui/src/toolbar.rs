@@ -76,8 +76,17 @@ pub enum Fit {
 /// The buttons a panel shows: its ready entries (at most [`MAX_BUTTONS`]), or its first entry
 /// when none is ready yet.
 pub fn buttons(entries: &'static [Capability]) -> Vec<&'static Capability> {
-    let ready: Vec<_> = entries.iter().filter(|c| c.command().is_some()).take(MAX_BUTTONS).collect();
-    if ready.is_empty() { entries.first().into_iter().collect() } else { ready }
+    buttons_from(entries)
+}
+
+fn buttons_from(entries: &[&'static Capability]) -> Vec<&'static Capability> {
+    let ready: Vec<_> = entries.iter().copied().filter(|c| c.command().is_some()).take(MAX_BUTTONS).collect();
+    if ready.is_empty() { entries.first().copied().into_iter().collect() } else { ready }
+}
+
+/// Embedded render views do not expose desktop-only outbound diagnostics.
+fn visible_entries(app: &ModelApp, entries: &'static [Capability]) -> Vec<&'static Capability> {
+    entries.iter().filter(|c| !app.embedded || c.id != "diagnostics.bug_report").collect()
 }
 
 /// The key of a panel's drop-down in [`crate::UiState::menu`]: `<tab>/<panel>`.
@@ -207,8 +216,8 @@ pub fn toolbar(app: &mut ModelApp, ui: &mut egui::Ui) {
         // Panels: the kit's ribbon row, one group per panel.
         let tab = app.ui.tab;
         let top = r.top() + TABS_HEIGHT;
-        let panels: Vec<&'static [Capability]> = catalogue::panels(tab).collect();
-        let shown: Vec<Vec<&'static Capability>> = panels.iter().map(|p| buttons(p)).collect();
+        let panels: Vec<Vec<&'static Capability>> = catalogue::panels(tab).map(|p| visible_entries(app, p)).collect();
+        let shown: Vec<Vec<&'static Capability>> = panels.iter().map(|p| buttons_from(p)).collect();
         let keys: Vec<String> = panels.iter().map(|p| panel_key(tab, p.first().map_or("", |c| c.panel))).collect();
         let states: Vec<Vec<State>> = panels.iter().map(|p| p.iter().map(|c| state(app, c)).collect()).collect();
         let painter = ui.painter().clone();

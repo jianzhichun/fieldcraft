@@ -166,7 +166,9 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             message(ui, QUESTION);
             note(ui, DETAIL);
             note(ui, "You can change this any time in Settings › Privacy.");
-            link = ui.link("What is sent (docs/privacy.md)").backing_on_hover_text(PRIVACY_URL).clicked();
+            if !app.embedded {
+                link = ui.link("What is sent (docs/privacy.md)").backing_on_hover_text(PRIVACY_URL).clicked();
+            }
             if app.updates_available() {
                 updates = update_check(ui, app.prefs.update_check);
             }

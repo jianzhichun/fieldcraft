@@ -378,10 +378,12 @@ fn privacy(ui: &mut egui::Ui, app: &mut ModelApp) {
             }
             note(ui, "settings.usage_detail");
             note(ui, "settings.usage_local");
-            let link =
-                kit::button(ui, tr("settings.usage_what_is_sent"), kit::Button::Ghost).backing_on_hover_text(tr("settings.usage_what_is_sent_hint"));
-            if link.clicked() {
-                app.open_link(ui.ctx(), crate::privacy::PRIVACY_URL);
+            if !app.embedded {
+                let link = kit::button(ui, tr("settings.usage_what_is_sent"), kit::Button::Ghost)
+                    .backing_on_hover_text(tr("settings.usage_what_is_sent_hint"));
+                if link.clicked() {
+                    app.open_link(ui.ctx(), crate::privacy::PRIVACY_URL);
+                }
             }
         });
     });
