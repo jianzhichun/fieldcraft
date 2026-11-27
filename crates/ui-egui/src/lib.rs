@@ -757,8 +757,30 @@ impl ModelApp {
     #[allow(clippy::disallowed_methods, reason = "the window's quick commands; long ones (`files::is_long`) start as jobs")]
     fn run_form(&mut self, id: &str, params: Value, form: bool) -> Result<Value, Failure> {
         self.ensure_idle().map_err(|message| Failure { message, refused: None })?;
-        let (revision, view) = (self.session.revision(), self.session.view.clone());
         let label = command_label(id);
+        // The tree and the Results card only choose which already-solved step to display. Do
+        // not make their click calculate the command's full nodal-field report: the plot below
+        // prepares what it needs in the background. Other parameters and external engine
+        // callers retain the complete `results.deformed` reply.
+        if id == "results.deformed"
+            && params.as_object().is_some_and(|p| p.len() == 1)
+            && let Some(step) = params.get("step").and_then(Value::as_str)
+        {
+            return match self.session.select_result(step) {
+                Ok(()) => {
+                    let value = self.session.display_report();
+                    self.follow_stage(id);
+                    self.set_status(reply::done(id, &label, &params, &value), false);
+                    Ok(value)
+                }
+                Err(e) => {
+                    let message = e.to_string();
+                    self.set_status(format!("{label}: {message}"), true);
+                    Err(Failure { message, refused: None })
+                }
+            };
+        }
+        let (revision, view) = (self.session.revision(), self.session.view.clone());
         let r = self.session.execute(id, &params).map_err(|e| match e {
             EngineError::Param(p) => {
                 let message = if form { p.for_form() } else { p.for_agents() };
@@ -1198,7 +1220,6 @@ impl ModelApp {
             files::off_thread("fieldcraft drop".into(), move || drop(stale));
         }
         self.frame_new_document();
-        self.prepared_job = None;
         self.prepared = (None, results::Prepared::default());
         self.follow_units();
         // A reply about the model is read again; any other one is out of date.
@@ -1324,34 +1345,39 @@ impl ModelApp {
     /// model. The solved values and fixed colour scale are cached; proportional shape and
     /// contour amplitudes follow the animation frame. Saved field frames rebuild the cache.
     pub fn plot(&mut self) -> Option<Arc<results::Plot>> {
+        let key = self.plot_key();
+        let still = key.as_ref().map(|k| PlotKey { frame: None, ..k.clone() });
+        // Keep at most one expensive preparation in flight. A newer selection uses a fallback
+        // frame until this worker ends, then starts its own preparation; stale results are dropped.
         if let Some((job_key, inbox)) = self.prepared_job.take() {
             match inbox.try_recv() {
-                Ok(prepared) => {
+                Ok(prepared) if Some(&job_key) == still.as_ref() => {
                     self.prepared = (Some(job_key), prepared.unwrap_or_default());
                     self.plot.0 = None;
                 }
+                Ok(_) => {}
                 Err(std::sync::mpsc::TryRecvError::Empty) => self.prepared_job = Some((job_key, inbox)),
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {}
             }
         }
-        let key = self.plot_key();
         if self.plot.0 != key {
             self.display();
-            let still = key.as_ref().map(|k| PlotKey { frame: None, ..k.clone() });
-            if self.prepared.0 != still && self.prepared_job.is_none() {
+        }
+        if self.prepared.0 != still && self.prepared_job.is_none() {
+            if let Some(k) = still.clone() {
                 let pick = key.as_ref().map(|k| k.pick).unwrap_or_default();
                 let bodies: Vec<String> = self.pick.names.iter().map(|n| n.name.clone()).collect();
-                if let Some(k) = still.clone() {
-                    let session = self.session.clone();
-                    let base = self.display.1.clone();
-                    let (tx, rx) = inbox::channel();
-                    files::off_thread("fieldcraft prepare results".into(), move || {
-                        let names: Vec<&str> = bodies.iter().map(String::as_str).collect();
-                        let _ = tx.send(results::prepare(&session, &base, pick, &names));
-                    });
-                    self.prepared_job = Some((k, rx));
-                }
+                let session = self.session.clone();
+                let base = self.display.1.clone();
+                let (tx, rx) = inbox::channel();
+                files::off_thread("fieldcraft prepare results".into(), move || {
+                    let names: Vec<&str> = bodies.iter().map(String::as_str).collect();
+                    let _ = tx.send(results::prepare(&session, &base, pick, &names));
+                });
+                self.prepared_job = Some((k, rx));
             }
+        }
+        if self.plot.0 != key {
             let frame = key.as_ref().and_then(|k| k.frame);
             let fallback = results::Prepared::default();
             let prepared = if self.prepared.0 == still { &self.prepared.1 } else { &fallback };
@@ -2863,6 +2889,28 @@ pub(crate) fn gpu_turn() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[cfg(test)]
+impl ModelApp {
+    /// Tests that inspect a completed contour wait for its worker; production `plot` remains
+    /// nonblocking and may return an uncoloured first frame.
+    pub(crate) fn settled_plot(&mut self) -> Option<Arc<results::Plot>> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            let plot = self.plot();
+            if self.prepared_job.is_none() {
+                return plot;
+            }
+            assert!(std::time::Instant::now() < deadline, "result preparation did not finish");
+            std::thread::yield_now();
+        }
+    }
+
+    pub(crate) fn settled_scene(&mut self) -> (u64, &Scene) {
+        self.settled_plot();
+        self.scene()
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use fieldcraft_render::Vec3;
 
@@ -3233,12 +3281,12 @@ mod tests {
         let mut app = ModelApp::new(Session::default());
         app.run_script(&fieldcraft_engine::sample::script()).unwrap();
         let error = theme::rgb(theme::Tokens::get(app.ui.dark).error);
-        let red = |app: &mut ModelApp| app.scene().1.tris.iter().filter(|t| t.color == error).count();
+        let red = |app: &mut ModelApp| app.settled_scene().1.tris.iter().filter(|t| t.color == error).count();
         assert_eq!(red(&mut app), 0);
         let some = app.session.model.elements().keys().take(3).copied().collect::<Vec<_>>();
         app.run("mesh.quality.mark", json!({"elements": some, "limits": {"scaled_jacobian": 1.5}})).unwrap();
         let marked = red(&mut app);
-        assert!(marked > 0 && marked < app.scene().1.tris.len(), "{marked}");
+        assert!(marked > 0 && marked < app.settled_scene().1.tris.len(), "{marked}");
         app.run("mesh.quality.mark", json!({})).unwrap();
         assert_eq!(red(&mut app), 0);
     }
@@ -3256,7 +3304,7 @@ mod tests {
         app.run("geometry.open", json!({"path": design.to_string_lossy()})).unwrap();
         let error = theme::rgb(theme::Tokens::get(app.ui.dark).error);
         let red = |app: &mut ModelApp| {
-            let s = app.scene().1;
+            let s = app.settled_scene().1;
             (s.tris.iter().filter(|t| t.color == error).count(), s.on_top.iter().filter(|l| l.color == error && l.a == l.b).count())
         };
         assert_eq!(red(&mut app), (0, 0));
@@ -3493,7 +3541,7 @@ mod tests {
         draw(&mut app, &egui::Context::default(), 1280.0, 800.0);
         let headless =
             view::frame(&app.session, &fieldcraft_render::Orientation::of(fieldcraft_render::StandardView::Iso), 320, 200, &Palette::LIGHT, None);
-        let window = app.scene().1.clone();
+        let window = app.settled_scene().1.clone();
         assert!(!window.tris.is_empty() && !window.lines.is_empty());
         assert_eq!(window.tris, headless.scene.tris);
         assert_eq!(window.lines, headless.scene.lines);
@@ -3559,6 +3607,23 @@ mod tests {
         ModelApp::new(results::tests::solved_cantilever())
     }
 
+    #[test]
+    fn selecting_another_step_supersedes_an_unfinished_preparation() {
+        let mut app = solved_app();
+        app.run("results.deformed", json!({"step": "Load"})).unwrap();
+        let old_key = app.plot_key().map(|k| PlotKey { frame: None, ..k });
+        let (old_tx, old_rx) = inbox::channel();
+        app.prepared_job = Some((old_key.unwrap(), old_rx));
+        app.run("results.deformed", json!({"step": "Modes"})).unwrap();
+        let plot = app.plot().unwrap();
+        assert_eq!(plot.view.step, "Modes");
+        assert_eq!(app.prepared_job.as_ref().map(|(k, _)| k.view.step.as_str()), Some("Load"));
+        assert!(old_tx.send(None).is_ok(), "the old worker remains the only in-flight preparation");
+        let plot = app.settled_plot().unwrap();
+        assert_eq!(plot.view.step, "Modes");
+        assert_eq!(plot.contour.as_ref().map(|c| c.field), Some(fieldcraft_engine::results::Field::Displacement));
+    }
+
     fn node_at(app: &ModelApp, xyz: [f64; 3]) -> u32 {
         results::tests::node_at(&app.session, xyz)
     }
@@ -3573,12 +3638,12 @@ mod tests {
         assert!(count(&mut app, t.glyph_load) > 0, "the push's arrows");
         // Wireframes, in a layer of their own.
         assert!(app.symbols().1.tris.is_empty());
-        assert!(!app.scene().1.lines.iter().any(|l| l.color == theme::rgb(t.glyph_constraint)));
+        assert!(!app.settled_scene().1.lines.iter().any(|l| l.color == theme::rgb(t.glyph_constraint)));
         // The symbols reach beyond the model: the clipping radius holds them.
-        let radius = app.scene().1.radius;
+        let radius = app.settled_scene().1.radius;
         app.ui.show_loads = false;
         assert_eq!(count(&mut app, t.glyph_constraint), 0);
-        assert!(app.scene().1.radius <= radius);
+        assert!(app.settled_scene().1.radius <= radius);
         app.ui.show_loads = true;
         // Selecting the clamp in the browser highlights its symbols.
         app.selected = Some((browser::Def::BoundaryCondition, "Clamp".into()));
@@ -3657,12 +3722,12 @@ mod tests {
         assert_eq!((view.step.as_str(), view.mode, view.contour), ("Modes", 1, Some(fieldcraft_engine::results::Field::Displacement)));
         // The plot draws contour bands: more triangles than the model's faces.
         let faces = app.display().tris.len();
-        assert!(app.scene().1.tris.len() > faces);
+        assert!(app.settled_scene().1.tris.len() > faces);
         app.run("results.clear", json!({})).unwrap();
-        assert!(app.plot().is_none());
+        assert!(app.settled_plot().is_none());
         // The model's faces again (without the setup's symbols).
         app.ui.show_loads = false;
-        assert_eq!(app.scene().1.tris.len(), faces);
+        assert_eq!(app.settled_scene().1.tris.len(), faces);
     }
 
     /// One frame of the window at `w` × `h` points.
@@ -3757,7 +3822,7 @@ mod tests {
         app.fit_view();
         assert!(app.cam.distance < home.distance * 1.2);
         let highlight = theme::Tokens::get(app.ui.dark).glyph_colors().highlight;
-        let lit = |app: &mut ModelApp| app.scene().1.on_top.iter().filter(|l| l.color == highlight).count();
+        let lit = |app: &mut ModelApp| app.settled_scene().1.on_top.iter().filter(|l| l.color == highlight).count();
         app.run("view.hide", json!({"items": [{"kind": "datum", "name": "Far"}]})).unwrap();
         assert_eq!(lit(&mut app), 0);
         app.selected = Some((browser::Def::Datum, "Far".into()));
@@ -3961,7 +4026,7 @@ mod tests {
             for overlay in ["selection_bar", "nav_bar"] {
                 assert!(!legend.intersects(region(&app, overlay)), "{w}×{h}: legend covers {overlay}");
             }
-            let plot = app.plot().unwrap();
+            let plot = app.settled_plot().unwrap();
             let bands = plot.contour.as_ref().unwrap().bands;
             assert_eq!(bands.count, 24);
             assert!(bands.over, "the extra over-limit colour is retained");
@@ -3997,7 +4062,7 @@ mod tests {
         let outlined = |app: &mut ModelApp| app.overlay().1.lines.iter().filter(|x| x.color == theme::rgb(t.pick_selected)).count();
         assert!(filled(&mut app) > 0 && outlined(&mut app) > 0);
         app.run("results.contour", json!({"step": "Load", "field": "von_mises"})).unwrap();
-        assert!(app.plot().is_some());
+        assert!(app.settled_plot().is_some());
         assert_eq!(filled(&mut app), 0);
         assert!(outlined(&mut app) > 0);
     }
@@ -4014,8 +4079,8 @@ mod tests {
         app.fit_view();
         let (w, h) = (400, 200);
         let cam = app.cam;
-        let radius = app.scene().1.radius;
-        let canvas = fieldcraft_render::render(app.scene().1, &cam, w, h).unwrap();
+        let radius = app.settled_scene().1.radius;
+        let canvas = fieldcraft_render::render(app.settled_scene().1, &cam, w, h).unwrap();
         let pixel = |p: Vec3| {
             let (x, y, _) = cam.to_screen(p, w as f64, h as f64, radius).unwrap();
             let i = (y as usize * w + x as usize) * 4;
@@ -4034,11 +4099,11 @@ mod tests {
         app.run("results.contour", json!({"step": "Load", "field": "von_mises", "bands": 6})).unwrap();
         app.run("results.animate", json!({})).unwrap();
         app.now = 0.0;
-        let zero = app.plot().unwrap();
+        let zero = app.settled_plot().unwrap();
         let cached = app.prepared.1.contour.clone().unwrap();
         assert!(zero.contour.as_ref().unwrap().values.iter().all(|v| *v == 0.0));
         app.now = results::PERIOD * 0.25;
-        let half = app.plot().unwrap();
+        let half = app.settled_plot().unwrap();
         let node = half.contour.as_ref().unwrap().max.0;
         app.probe_node(node).unwrap();
         let probe = app.probe.as_ref().unwrap();
@@ -4052,7 +4117,7 @@ mod tests {
         );
         assert!((half.contour.as_ref().unwrap().max.1 - expected * 0.5).abs() < expected * 1e-12);
         app.now = results::PERIOD * 0.5;
-        let full = app.plot().unwrap();
+        let full = app.settled_plot().unwrap();
         assert!(Arc::ptr_eq(&cached, app.prepared.1.contour.as_ref().unwrap()), "reuse solved nodal values");
         let (zero_c, half_c, full_c) = (zero.contour.as_ref().unwrap(), half.contour.as_ref().unwrap(), full.contour.as_ref().unwrap());
         assert_eq!(zero_c.bands, full_c.bands);
@@ -4072,13 +4137,13 @@ mod tests {
         assert_ne!(colors(&zero), colors(&full), "the rendered stress bands change too");
         app.run("results.deformed", json!({"show": false})).unwrap();
         app.now = 0.0;
-        let flat_zero = app.plot().unwrap();
+        let flat_zero = app.settled_plot().unwrap();
         app.now = results::PERIOD * 0.5;
-        let flat_full = app.plot().unwrap();
+        let flat_full = app.settled_plot().unwrap();
         assert_eq!(flat_zero.display.tris, flat_full.display.tris);
         assert_ne!(colors(&flat_zero), colors(&flat_full), "contours animate on the undeformed mesh");
         app.run("results.animate", json!({"on": false})).unwrap();
-        let stopped = app.plot().unwrap();
+        let stopped = app.settled_plot().unwrap();
         assert_eq!(stopped.contour.as_ref().unwrap().values, full_c.values);
         assert!(stopped.amplitude.is_none());
     }
@@ -4105,18 +4170,18 @@ mod tests {
                 for deformed in [false, true] {
                     app.session.results_view.as_mut().unwrap().deformed = deformed;
                     app.now = 0.0;
-                    let first = app.plot().unwrap();
+                    let first = app.settled_plot().unwrap();
                     app.now = results::PERIOD * 0.25;
-                    assert!(Arc::ptr_eq(&first, &app.plot().unwrap()), "{step}/{field}: idle playback must reuse the plot");
+                    assert!(Arc::ptr_eq(&first, &app.settled_plot().unwrap()), "{step}/{field}: idle playback must reuse the plot");
                 }
             }
         }
         // Explicit frame selections in a heat view still invalidate the plot cache.
         app.run("results.contour", json!({"step": "Warm", "field": "temperature"})).unwrap();
         app.session.results_view.as_mut().unwrap().frame = Some(0);
-        let initial = app.plot().unwrap();
+        let initial = app.settled_plot().unwrap();
         app.session.results_view.as_mut().unwrap().frame = Some(2);
-        let final_frame = app.plot().unwrap();
+        let final_frame = app.settled_plot().unwrap();
         assert!(!Arc::ptr_eq(&initial, &final_frame));
         assert_ne!(initial.contour.as_ref().unwrap().values, final_frame.contour.as_ref().unwrap().values);
     }
@@ -4144,7 +4209,7 @@ mod tests {
         app.probe_node(node_at(&app, [0.0, 0.0, 0.0])).unwrap();
         assert!(app.probe.as_ref().unwrap().lines.iter().any(|l| l.starts_with("RF ")));
         // The plot under a click: a ray onto the tip's end face picks a node there.
-        let plot = app.plot().unwrap();
+        let plot = app.settled_plot().unwrap();
         let (node, _) = plot.display.pick(results::tests::mm([1000.0, 0.5, 0.5]), Vec3::new(-1.0, 0.0, 0.0)).unwrap();
         assert_eq!(app.session.model.node(node).unwrap().xyz[0], 0.1);
         // An edit leaves the plot shown but stale; probing it is refused.
@@ -4153,7 +4218,7 @@ mod tests {
             json!({"name": "Steel", "elastic": {"type": "isotropic", "young": 70000, "poisson": 0.33}, "density": 2.7e-9}),
         )
         .unwrap();
-        assert!(app.plot().is_some_and(|p| p.stale));
+        assert!(app.settled_plot().is_some_and(|p| p.stale));
         let e = app.probe_node(tip).unwrap_err();
         assert!(e.contains("stale") && app.probe.is_none(), "{e}");
     }
@@ -4165,18 +4230,18 @@ mod tests {
         app.run("solve.explicit", json!({})).unwrap();
         // The last frame at true scale: the bar has moved back off the wall's side (x < 0 is
         // the wall, so nothing passes it) and carries stress contours.
-        let last = app.plot().unwrap();
+        let last = app.settled_plot().unwrap();
         assert_eq!(last.frame().map(|(k, _, n)| (k, n)), Some((10, 11)));
         assert!(last.contour.as_ref().is_some_and(|c| c.field == fieldcraft_engine::results::Field::VonMises));
         assert!(last.display.bounds.min.x > -1e-9, "{:?}", last.display.bounds);
         // Frame 0 is the undeformed bar at rest on its initial velocity.
         app.run("results.frame", json!({"frame": 0})).unwrap();
-        let first = app.plot().unwrap();
+        let first = app.settled_plot().unwrap();
         assert_eq!(first.display.tris, app.display().tris);
         // Animated, the frames run through once per cycle.
         app.run("results.animate", json!({})).unwrap();
         app.now = results::PERIOD * 0.5;
-        let animated = app.plot().unwrap();
+        let animated = app.settled_plot().unwrap();
         assert_eq!(animated.pick.frame, Some(5));
         assert!(animated.amplitude.is_none(), "saved frames are not proportionally scaled");
         let expected = fieldcraft_engine::results::field_values(

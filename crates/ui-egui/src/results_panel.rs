@@ -1338,7 +1338,7 @@ mod tests {
         app.run("file.sample", json!({"name": "cantilever"})).unwrap();
         app.run("solve.run", json!({})).unwrap();
         let reply = app.run("results.contour", json!({"field": "von_mises"})).unwrap();
-        let plot = app.plot().unwrap();
+        let plot = app.settled_plot().unwrap();
         for (lang, text, max, min) in [("zh", "等效应力 [MPa]", "最大", "最小"), ("en", "Von Mises stress [MPa]", "Max", "Min")] {
             let _scope = solidcraft_ui_text::scope(lang);
             assert_eq!(title(&plot), text);
@@ -1369,20 +1369,20 @@ mod tests {
         app.run("model.step.create", json!({"name": "Increments", "procedure": {"type": "nonlinear_static", "nonlinear_geometry": false, "initial_increment": 0.25}, "boundary_conditions": ["Clamp"], "loads": ["Push"]})).unwrap();
         app.run("solve.nonlinear", json!({"step": "Increments"})).unwrap();
         app.run("results.contour", json!({"field": "von_mises"})).unwrap();
-        let final_max = app.plot().unwrap().contour.as_ref().unwrap().max.1;
+        let final_max = app.settled_plot().unwrap().contour.as_ref().unwrap().max.1;
         app.run("results.animate", json!({})).unwrap();
         app.now = 0.0;
-        let plot = app.plot().unwrap();
+        let plot = app.settled_plot().unwrap();
         assert!(!plot.unavailable && plot.contour.is_some() && plot.amplitude.is_none());
         assert_eq!(title(&plot), "Von Mises stress [MPa]");
         app.run("results.deformed", json!({"show": false})).unwrap();
         app.now = results::PERIOD * (results::FRAMES - 1) as f64 / results::FRAMES as f64;
-        let final_frame = app.plot().unwrap();
+        let final_frame = app.settled_plot().unwrap();
         assert_ne!(plot.pick.frame, final_frame.pick.frame, "recorded nonlinear increments keep playing without deformation");
         assert!(final_frame.contour.is_some() && !final_frame.unavailable && final_frame.amplitude.is_none());
         app.run("results.animate", json!({"on": false})).unwrap();
         app.run("results.frame", json!({"frame": 1})).unwrap();
-        let first = app.plot().unwrap();
+        let first = app.settled_plot().unwrap();
         let max = first.contour.as_ref().unwrap().max.1;
         assert!(!first.unavailable && max > 0.0 && max < 0.5 * final_max, "a quarter of the load: {max} of {final_max}");
         let mut capped = first.as_ref().clone();
@@ -1404,7 +1404,7 @@ mod tests {
         app.run("file.sample", json!({"name": "cantilever"})).unwrap();
         app.run("solve.run", json!({})).unwrap();
         app.run("results.contour", json!({"field": "von_mises", "bands": 24, "range": {"min": 0, "max": 10}})).unwrap();
-        let mut plot = app.plot().unwrap().as_ref().clone();
+        let mut plot = app.settled_plot().unwrap().as_ref().clone();
         let ctx = egui::Context::default();
         let t = Tokens::get(true);
         let view = Rect::from_min_size(pos2(250.0, 126.0), vec2(401.0, 406.0));
@@ -1531,7 +1531,7 @@ mod tests {
         app.run("file.sample", json!({"name": "cantilever"})).unwrap();
         app.run("solve.run", json!({})).unwrap();
         app.run("results.contour", json!({"field": "von_mises", "range": {"max": 10}})).unwrap();
-        let plot = app.plot().unwrap();
+        let plot = app.settled_plot().unwrap();
         let ctx = egui::Context::default();
         let t = Tokens::get(true);
         for _ in 0..2 {
@@ -1558,7 +1558,7 @@ mod tests {
         app.run("file.sample", json!({"name": "cantilever"})).unwrap();
         app.run("solve.run", json!({})).unwrap();
         app.run("results.contour", json!({"field": "von_mises"})).unwrap();
-        let plot = app.plot().unwrap();
+        let plot = app.settled_plot().unwrap();
         let ctx = egui::Context::default();
         let t = Tokens::get(true);
         let mut area = Rect::NOTHING;
@@ -1584,7 +1584,7 @@ mod tests {
         app.run("file.sample", json!({"name": "cantilever"})).unwrap();
         app.run("solve.run", json!({})).unwrap();
         app.run("results.contour", json!({"field": "von_mises", "bands": 5, "range": {"min": 0, "max": 100}})).unwrap();
-        let plot = app.plot().unwrap();
+        let plot = app.settled_plot().unwrap();
         let ctx = egui::Context::default();
         let t = Tokens::get(true);
         let view = Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0));

@@ -206,6 +206,16 @@ fn view_of<'a>(s: &'a mut Session, step: &str) -> Result<&'a mut ResultsView> {
     s.results_view.as_mut().ok_or_else(|| EngineError::Params("no results are shown".into()))
 }
 
+impl Session {
+    /// Select a solved step in the native display without calculating its full report. Other
+    /// callers use `results.deformed`, whose reply also describes contours, modes and frames.
+    pub fn select_result(&mut self, step: &str) -> Result<()> {
+        let step = step_for(self, &json!({"step": step}), Want::Any)?;
+        view_of(self, &step)?.deformed = true;
+        Ok(())
+    }
+}
+
 fn deformed(s: &mut Session, p: &Value) -> Result<Value> {
     let step = step_for(s, p, Want::Any)?;
     let show = opt::<bool>(p, "show")?.unwrap_or(true);
@@ -224,10 +234,7 @@ fn deformed(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(scale) = scale {
         v.scale = scale;
     }
-    // Selecting a result from the browser is display-only. The full report scans the selected
-    // contour over every node, which made a large model look frozen before repainting. Keep the
-    // complete response for callers changing deformation settings without selecting a step.
-    Ok(if p.get("step").is_some() { s.display_report() } else { s.results_report() })
+    Ok(s.results_report())
 }
 
 fn contour(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1498,6 +1505,9 @@ mod tests {
         let (journal, revision) = (s.journal.len(), s.revision());
         // Solving showed the first solved step, a static one: contours on the undeformed shape.
         assert_eq!(s.results_view.as_ref().map(|v| (v.step.as_str(), v.contour, v.deformed)), Some(("Bend", Some(Field::VonMises), false)));
+        // Engine/MCP callers still receive the complete report when they select a step.
+        let full = s.execute("results.deformed", &json!({"step": "Bend"})).unwrap();
+        assert!(full["contour"]["range"].is_object(), "{full}");
         s.execute("results.clear", &json!({})).unwrap();
         let r = s.execute("results.contour", &json!({"field": "von_mises"})).unwrap();
         assert_eq!(r["view"]["step"], "Bend", "{r}");

@@ -82,7 +82,7 @@ impl ModelApp {
             // Caches keyed by the design, revision or step they were built for.
             bodies: _,
             prebuilt: _,
-            prepared: _,
+            prepared,
             prepared_job: _,
             scene: _,
             symbols: _,
@@ -151,6 +151,7 @@ impl ModelApp {
         *node_move = Default::default();
         *node_drag = None;
         viewport.document_replaced();
+        *prepared = Default::default();
         *probe = None;
         *reactions = None;
         *xy = None;
