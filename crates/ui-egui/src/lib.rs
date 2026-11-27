@@ -752,34 +752,34 @@ impl ModelApp {
         self.run_form(id, params, false).map_err(|f| f.message)
     }
 
+    /// Select a solved result from the native browser or Results panel without calculating the
+    /// complete contour report. Engine/control callers continue through [`Self::run`].
+    pub(crate) fn show_result_step(&mut self, step: &str) -> Result<Value, String> {
+        self.ensure_idle()?;
+        let id = "results.deformed";
+        let params = json!({"step": step});
+        let label = command_label(id);
+        match self.session.select_result(step) {
+            Ok(()) => {
+                let value = self.session.display_report();
+                self.follow_stage(id);
+                self.set_status(reply::done(id, &label, &params, &value), false);
+                Ok(value)
+            }
+            Err(e) => {
+                let message = e.to_string();
+                self.set_status(format!("{label}: {message}"), true);
+                Err(message)
+            }
+        }
+    }
+
     /// [`Self::run`], from a form when `form`: a refused parameter is then named by its field's
     /// label (the engine's message names its key, which agents need).
     #[allow(clippy::disallowed_methods, reason = "the window's quick commands; long ones (`files::is_long`) start as jobs")]
     fn run_form(&mut self, id: &str, params: Value, form: bool) -> Result<Value, Failure> {
         self.ensure_idle().map_err(|message| Failure { message, refused: None })?;
         let label = command_label(id);
-        // The tree and the Results card only choose which already-solved step to display. Do
-        // not make their click calculate the command's full nodal-field report: the plot below
-        // prepares what it needs in the background. Other parameters and external engine
-        // callers retain the complete `results.deformed` reply.
-        if id == "results.deformed"
-            && params.as_object().is_some_and(|p| p.len() == 1)
-            && let Some(step) = params.get("step").and_then(Value::as_str)
-        {
-            return match self.session.select_result(step) {
-                Ok(()) => {
-                    let value = self.session.display_report();
-                    self.follow_stage(id);
-                    self.set_status(reply::done(id, &label, &params, &value), false);
-                    Ok(value)
-                }
-                Err(e) => {
-                    let message = e.to_string();
-                    self.set_status(format!("{label}: {message}"), true);
-                    Err(Failure { message, refused: None })
-                }
-            };
-        }
         let (revision, view) = (self.session.revision(), self.session.view.clone());
         let r = self.session.execute(id, &params).map_err(|e| match e {
             EngineError::Param(p) => {
@@ -1346,9 +1346,24 @@ impl ModelApp {
     /// contour amplitudes follow the animation frame. Saved field frames rebuild the cache.
     pub fn plot(&mut self) -> Option<Arc<results::Plot>> {
         let key = self.plot_key();
-        let still = key.as_ref().map(|k| PlotKey { frame: None, ..k.clone() });
-        // Keep at most one expensive preparation in flight. A newer selection uses a fallback
-        // frame until this worker ends, then starts its own preparation; stale results are dropped.
+        // Recorded frames carry different field values and must be prepared for each frame; the
+        // other animated plots only change their deformation multiplier and can reuse one cache.
+        let recorded_frame = key.as_ref().is_some_and(|k| {
+            k.frame.is_some()
+                && results::shown(&self.session).is_some_and(|(_, result, _)| match result.kind() {
+                    fieldcraft_engine::results::Kind::Explicit(_) | fieldcraft_engine::results::Kind::Fluid(_) => true,
+                    fieldcraft_engine::results::Kind::Static(static_result) => static_result.nonlinear.is_some(),
+                    _ => false,
+                })
+        });
+        let still = key.as_ref().map(|k| {
+            let mut preparation = k.clone();
+            if !recorded_frame {
+                preparation.frame = None;
+                preparation.pick.frame = None;
+            }
+            preparation
+        });
         if let Some((job_key, inbox)) = self.prepared_job.take() {
             match inbox.try_recv() {
                 Ok(prepared) if Some(&job_key) == still.as_ref() => {
@@ -1369,12 +1384,18 @@ impl ModelApp {
                 let bodies: Vec<String> = self.pick.names.iter().map(|n| n.name.clone()).collect();
                 let session = self.session.clone();
                 let base = self.display.1.clone();
-                let (tx, rx) = inbox::channel();
-                files::off_thread("fieldcraft prepare results".into(), move || {
+                if recorded_frame {
                     let names: Vec<&str> = bodies.iter().map(String::as_str).collect();
-                    let _ = tx.send(results::prepare(&session, &base, pick, &names));
-                });
-                self.prepared_job = Some((k, rx));
+                    self.prepared = (Some(k), results::prepare(&session, &base, pick, &names).unwrap_or_default());
+                    self.plot.0 = None;
+                } else {
+                    let (tx, rx) = inbox::channel();
+                    files::off_thread("fieldcraft prepare results".into(), move || {
+                        let names: Vec<&str> = bodies.iter().map(String::as_str).collect();
+                        let _ = tx.send(results::prepare(&session, &base, pick, &names));
+                    });
+                    self.prepared_job = Some((k, rx));
+                }
             }
         }
         if self.plot.0 != key {
@@ -3610,11 +3631,11 @@ mod tests {
     #[test]
     fn selecting_another_step_supersedes_an_unfinished_preparation() {
         let mut app = solved_app();
-        app.run("results.deformed", json!({"step": "Load"})).unwrap();
+        app.show_result_step("Load").unwrap();
         let old_key = app.plot_key().map(|k| PlotKey { frame: None, ..k });
         let (old_tx, old_rx) = inbox::channel();
         app.prepared_job = Some((old_key.unwrap(), old_rx));
-        app.run("results.deformed", json!({"step": "Modes"})).unwrap();
+        app.show_result_step("Modes").unwrap();
         let plot = app.plot().unwrap();
         assert_eq!(plot.view.step, "Modes");
         assert_eq!(app.prepared_job.as_ref().map(|(k, _)| k.view.step.as_str()), Some("Load"));

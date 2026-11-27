@@ -1129,7 +1129,7 @@ pub fn browser(app: &mut ModelApp, ui: &mut egui::Ui) {
             Act::Menu(target, action) => menu::apply(app, target, action),
             Act::ShowResult(step) => {
                 // Errors show in the status bar.
-                let _ = app.run("results.deformed", json!({"step": step}));
+                let _ = app.show_result_step(&step);
             }
             Act::Start(command) => {
                 // A command that cannot run yet says why in the status bar.
@@ -2139,10 +2139,14 @@ pub(crate) mod tests {
         assert!(app.session.is_dirty());
         app.tree_open.clear();
         app.tree_open.insert("results".into());
-        let _lang = solidcraft_ui_text::scope("zh");
+        crate::theme::install_look();
         let ctx = egui::Context::default();
         let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 1200.0))), ..Default::default() };
-        let painted = ctx.run_ui(input, |ui| rows(&mut app, ui, &mut Vec::new()));
+        let mut painted = ctx.run_ui(input, |ui| {
+            let _lang = solidcraft_ui_text::scope("zh");
+            rows(&mut app, ui, &mut Vec::new())
+        });
+        painted.textures_delta.clear();
         fn collect(shape: &egui::Shape, out: &mut Vec<String>) {
             match shape {
                 egui::Shape::Text(t) => out.push(t.galley.text().to_owned()),

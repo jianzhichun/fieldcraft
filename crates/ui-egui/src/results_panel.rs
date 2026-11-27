@@ -577,7 +577,14 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
     let save_view = views_row(app, ui, &mut run);
     for (id, params) in run {
         // The reaction sums land in `app.reactions` (ModelApp::run_form).
-        let _ = app.run(id, params);
+        let _ = if id == "results.deformed"
+            && params.as_object().is_some_and(|p| p.len() == 1)
+            && let Some(step) = params.get("step").and_then(Value::as_str)
+        {
+            app.show_result_step(step)
+        } else {
+            app.run(id, params)
+        };
     }
     if save_view {
         // The form starts with a free name and the viewport's camera.
