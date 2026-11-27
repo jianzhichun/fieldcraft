@@ -479,6 +479,8 @@ pub struct ModelApp {
     prebuilt: Option<Prebuilt>,
     /// The frame-independent part of the results plot (scale, contour) and what it was built for.
     prepared: (Option<PlotKey>, results::Prepared),
+    /// Background preparation for a newly selected result step.
+    prepared_job: Option<(PlotKey, inbox::Inbox<Option<results::Prepared>>)>,
     /// The built scene, its key and the box around its datums (they reach beyond the model).
     scene: (Option<u64>, Scene, Aabb3),
     /// The setup's symbols, a layer of their own drawn at the camera's scale, its key and what
@@ -640,6 +642,7 @@ impl ModelApp {
             bodies: (None, Vec::new()),
             prebuilt: None,
             prepared: (None, results::Prepared::default()),
+            prepared_job: None,
             scene: (None, Scene::default(), Aabb3::EMPTY),
             symbols: (None, Scene::default(), Drawn::default()),
             step_glyphs: (None, Glyphs::default()),
@@ -1195,6 +1198,8 @@ impl ModelApp {
             files::off_thread("fieldcraft drop".into(), move || drop(stale));
         }
         self.frame_new_document();
+        self.prepared_job = None;
+        self.prepared = (None, results::Prepared::default());
         self.follow_units();
         // A reply about the model is read again; any other one is out of date.
         self.reply = self.reply.take().and_then(|mut r| {
@@ -1319,17 +1324,38 @@ impl ModelApp {
     /// model. The solved values and fixed colour scale are cached; proportional shape and
     /// contour amplitudes follow the animation frame. Saved field frames rebuild the cache.
     pub fn plot(&mut self) -> Option<Arc<results::Plot>> {
+        if let Some((job_key, inbox)) = self.prepared_job.take() {
+            match inbox.try_recv() {
+                Ok(prepared) => {
+                    self.prepared = (Some(job_key), prepared.unwrap_or_default());
+                    self.plot.0 = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => self.prepared_job = Some((job_key, inbox)),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {}
+            }
+        }
         let key = self.plot_key();
         if self.plot.0 != key {
             self.display();
             let still = key.as_ref().map(|k| PlotKey { frame: None, ..k.clone() });
-            if self.prepared.0 != still {
+            if self.prepared.0 != still && self.prepared_job.is_none() {
                 let pick = key.as_ref().map(|k| k.pick).unwrap_or_default();
-                let bodies: Vec<&str> = self.pick.names.iter().map(|n| n.name.as_str()).collect();
-                self.prepared = (still, results::prepare(&self.session, &self.display.1, pick, &bodies).unwrap_or_default());
+                let bodies: Vec<String> = self.pick.names.iter().map(|n| n.name.clone()).collect();
+                if let Some(k) = still.clone() {
+                    let session = self.session.clone();
+                    let base = self.display.1.clone();
+                    let (tx, rx) = inbox::channel();
+                    files::off_thread("fieldcraft prepare results".into(), move || {
+                        let names: Vec<&str> = bodies.iter().map(String::as_str).collect();
+                        let _ = tx.send(results::prepare(&session, &base, pick, &names));
+                    });
+                    self.prepared_job = Some((k, rx));
+                }
             }
             let frame = key.as_ref().and_then(|k| k.frame);
-            let p = key.as_ref().and_then(|_| results::plot(&self.session, &self.display.1, frame, &self.prepared.1));
+            let fallback = results::Prepared::default();
+            let prepared = if self.prepared.0 == still { &self.prepared.1 } else { &fallback };
+            let p = key.as_ref().and_then(|_| results::plot(&self.session, &self.display.1, frame, prepared));
             self.plot = (key, p.map(Arc::new));
         }
         self.plot.1.clone()
@@ -2280,6 +2306,9 @@ impl ModelApp {
         }
         self.drain_control(ctx);
         if self.poll_loading() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+        if self.prepared_job.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         if self.poll_picker() {

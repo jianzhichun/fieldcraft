@@ -76,7 +76,8 @@ pub enum Fit {
 /// The buttons a panel shows: its ready entries (at most [`MAX_BUTTONS`]), or its first entry
 /// when none is ready yet.
 pub fn buttons(entries: &'static [Capability]) -> Vec<&'static Capability> {
-    buttons_from(entries)
+    let ready: Vec<_> = entries.iter().filter(|c| c.command().is_some()).take(MAX_BUTTONS).collect();
+    if ready.is_empty() { entries.first().into_iter().collect() } else { ready }
 }
 
 fn buttons_from(entries: &[&'static Capability]) -> Vec<&'static Capability> {
@@ -457,7 +458,10 @@ struct Row {
 
 /// The rows of a panel's drop-down: every entry with its related commands (edit, delete…) under
 /// it without an icon, coming-soon entries greyed with their milestone.
-fn rows(app: &ModelApp, entries: &'static [Capability]) -> Vec<Row> {
+fn rows<'a, I>(app: &ModelApp, entries: I) -> Vec<Row>
+where
+    I: IntoIterator<Item = &'a Capability>,
+{
     let mut rows = Vec::new();
     for c in entries {
         let missing = app.unavailable(c.id);
@@ -532,8 +536,8 @@ fn menu_width(ui: &egui::Ui, rows: &[Row]) -> f32 {
 /// A panel's drop-down, as SolidCraft's: its [`rows`] at the kit's menu width, Up and Down through
 /// the enabled ones, scrolling when the window is too short. A click (or Enter) starts the row's
 /// command and closes it.
-pub fn dropdown(app: &mut ModelApp, ui: &mut egui::Ui, entries: &'static [Capability]) {
-    let rows = rows(app, entries);
+pub fn dropdown(app: &mut ModelApp, ui: &mut egui::Ui, entries: &[&Capability]) {
+    let rows = rows(app, entries.iter().copied());
     let style = menu_style(ui.ctx());
     ui.spacing_mut().item_spacing.y = 0.0;
     let width = menu_width(ui, &rows);

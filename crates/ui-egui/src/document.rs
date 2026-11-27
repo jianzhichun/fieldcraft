@@ -83,6 +83,7 @@ impl ModelApp {
             bodies: _,
             prebuilt: _,
             prepared: _,
+            prepared_job: _,
             scene: _,
             symbols: _,
             step_glyphs: _,

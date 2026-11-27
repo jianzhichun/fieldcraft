@@ -720,6 +720,16 @@ impl Session {
         self.results.get(step).map(|(revision, r)| (r, *revision == self.revision))
     }
 
+    /// The cheap part of [`Self::results_report`] used by display-only actions. Changing the
+    /// shown step must not synchronously scan every nodal contour value just to answer the click.
+    pub fn display_report(&self) -> Value {
+        let display = self.units();
+        let Some(v) = &self.results_view else { return json!({"view": null}) };
+        let result = self.latest_result(&v.step).map(|(r, _)| &**r);
+        let stale = self.latest_result(&v.step).is_some_and(|(_, current)| !current);
+        json!({"view": view_json(v, result, display), "stale": stale})
+    }
+
     /// What the results display shows: the view, whether its result is stale, the contour
     /// field's range, a frequency step's modes and an explicit step's frame times (the
     /// `results.*` commands' reply), every number in the display system ([`Session::units`]).

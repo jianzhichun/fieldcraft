@@ -224,7 +224,10 @@ fn deformed(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(scale) = scale {
         v.scale = scale;
     }
-    Ok(s.results_report())
+    // Selecting a result from the browser is display-only. The full report scans the selected
+    // contour over every node, which made a large model look frozen before repainting. Keep the
+    // complete response for callers changing deformation settings without selecting a step.
+    Ok(if p.get("step").is_some() { s.display_report() } else { s.results_report() })
 }
 
 fn contour(s: &mut Session, p: &Value) -> Result<Value> {
